@@ -227,24 +227,15 @@ have hcard : 0 < ((@Set.univ (Fin ( G.maxDegree  + 1))).toFinset).card - ((C '' 
     exact degree_le_maxDegree G u
 exact subset_card_ne_implies_nonempty_diff h_sub hcard
 
-inductive alternating_trail (V : Type) (G : SimpleGraph V) (n : ℕ) (C : EdgeColoring G (Fin n))
-  (alpha beta : Fin n) : V → V → Type
-| nil : ∀ (v : V), alternating_trail V G n C alpha beta v v
-| na : ∀ { u₂ v : V}, alternating_trail V G n C alpha beta v v → (h : G.Adj u₂ v) →
-  C ⟨s(u₂, v), by rw [mem_edgeSet]; exact h⟩ = alpha → alternating_trail V G n C alpha beta v u₂
-| ba : ∀ {u₁ u₂ v : V}, alternating_trail V G n C alpha beta v u₁ → (h : G.Adj u₂ u₁) →
-  C ⟨s(u₂, u₁), by rw [mem_edgeSet]; exact h⟩ = alpha → alternating_trail V G n C alpha beta v u₂
-| ab : ∀ {u₁ u₂ v : V}, alternating_trail V G n C alpha beta v u₁ → (h : G.Adj u₂ u₁) →
-  C ⟨s(u₂, u₁), by rw [mem_edgeSet]; exact h⟩ = beta → alternating_trail V G n C alpha beta v u₂
 
-def at_length {V : Type} {G : SimpleGraph V} {n : ℕ}
-  {C : EdgeColoring G (Fin n)} {alpha beta : Fin n} {v u : V}
-  : alternating_trail V G n C alpha beta v u → ℕ := fun t =>
-  match t with
-  | alternating_trail.nil  v => 0
-  | alternating_trail.na t' _ _  => ( at_length t' ) + 1
-  | alternating_trail.ab t' _ _ => ( at_length t' ) + 1
-  | alternating_trail.ba t' _ _ => ( at_length t' ) + 1
+-- def at_length {V : Type} {G : SimpleGraph V} {n : ℕ}
+--   {C : EdgeColoring G (Fin n)} {alpha beta : Fin n} {v u : V}
+--   : alternating_trail V G n C alpha beta v u → ℕ := fun t =>
+--   match t with
+--   | alternating_trail.nil  v => 0
+--   | alternating_trail.na t' _ _  => ( at_length t' ) + 1
+--   | alternating_trail.ab t' _ _ => ( at_length t' ) + 1
+--   | alternating_trail.ba t' _ _ => ( at_length t' ) + 1
 
 -- structure AltTrail (V : Type) (G : SimpleGraph V) (n : ℕ) (C : EdgeColoring G (Fin n)) where
 --   alpha : Fin n
@@ -255,63 +246,63 @@ def at_length {V : Type} {G : SimpleGraph V} {n : ℕ}
 --   last_color : Fin n
 --   trail : alternating_trail V G n C alpha beta last_color v u length
 
-
--- inductive AlternatingProperty {V : Type} {G : SimpleGraph V} {v u : V} {p : G.Walk v u}: Prop :=
---   match w with
--- | nil : ∀ {v : V}, AlternatingProperty (.nil : G.Walk v v)
--- | cons_alpha : ∀ {v u w : V} {h : G.Adj v u} {p : G.Walk u w},
---     C ⟨s(v, u), by simp [h]⟩ = alpha →
---     AlternatingProperty p →
---     AlternatingProperty (.cons h p)
--- | cons_beta : ∀ {v u w : V} {h : G.Adj v u} {p : G.Walk u w},
---     C ⟨s(v, u), by simp [h]⟩ = beta →
---     AlternatingProperty p →
---     AlternatingProperty (.cons h p)
-
--- class AlternatingTrail (w : G.Walk v u) where
---   alternating_property : AlternatingProperty w
-
-def all_alternating_trails (V : Type) (G : SimpleGraph V) (n : ℕ) (C : EdgeColoring G (Fin n)) (alpha beta : Fin n) : Type :=
-  Σ (v u : V) , alternating_trail V G n C alpha beta v u
-
--- lemma at_length_zero_iff_nil {V : Type} {H: SimpleGraph V} {n : ℕ} {C: EdgeColoring H (Fin n)} {alpha beta : Fin n} {v : V}
---   (t : alternating_trail V H n C alpha beta v v) : 0 = at_length t ↔ t= (@alternating_trail.nil V H n C alpha beta v) := by sorry
-
-def toWalk {V : Type} {G : SimpleGraph V} {n: ℕ} {C: EdgeColoring G (Fin n)} {alpha beta : Fin n} {v u : V}
-  (t : @alternating_trail V G n C alpha beta v u) : G.Walk u v := by
-  match t with
-  | alternating_trail.nil v => exact SimpleGraph.Walk.nil
-  | alternating_trail.na trail' h_edge _ => exact SimpleGraph.Walk.cons h_edge (toWalk trail')
-  | alternating_trail.ba trail' h_edge _ => exact SimpleGraph.Walk.cons h_edge (toWalk trail')
-  | alternating_trail.ab trail' h_edge _ => exact SimpleGraph.Walk.cons h_edge (toWalk trail')
-
--- def at_tail {V : Type} {G : SimpleGraph V} {n: ℕ} {C: EdgeColoring G (Fin n)}
--- {alpha beta : Fin n} {v u : V} (t : alternating_trail V G n C alpha beta v u)
--- : Σ  (u' : V), alternating_trail V G n C beta alpha u' u:= by
---   cases t with
---   | nil v =>  exact ⟨v, .nil v⟩
---   | na t' h_edge _ =>  exact ⟨u, .nil u⟩
---   | ba t' h_edge h_color =>
---     have ⟨u', tail_prev⟩ := at_tail t'
---     exact ⟨ u', (alternating_trail.ab) tail_prev h_edge h_color ⟩
---   | ab t' h_edge h_color =>
---     have ⟨u', tail_prev⟩ := at_tail t'
---     exact ⟨ u', (alternating_trail.ba ) tail_prev h_edge h_color ⟩
-
--- lemma at_length_toWalk_eq_length {V : Type} {G : SimpleGraph V} {n : ℕ} {C: EdgeColoring G (Fin n)} {alpha beta : Fin n} {v u : V}
---   (trail : alternating_trail V G n C alpha beta v u) : (toWalk trail).length = at_length trail := by
---   induction trail with
---   | nil v => simp [ toWalk, at_length ]
---   | na t' h_edge _ a_ih => rw [toWalk, Walk.length, a_ih , at_length]
---   | ba trail' h_edge _ a_ih => rw [toWalk, Walk.length, a_ih , at_length]
---   | ab trail' h_edge _ a_ih => rw [toWalk, Walk.length, a_ih , at_length]
+inductive at_prop_2 {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)}
+  : ∀ { _ _  : Fin n} , ∀ {v u : V}, G.Walk v u → Prop where
+  | nil : ∀ {v : V}, at_prop_2 (Walk.nil : G.Walk v v)
+  | mk : ∀ { α β : Fin n}, ∀ {v u: V}, {p : G.Walk v u} -> {hp : ¬ p.Nil } -> C ⟨ s(v, p.snd), by simp ; apply Walk.adj_snd hp ⟩  = α -> @at_prop_2 V G n C β α p.snd u p.tail -> at_prop_2 p
 
 
--- lemma alt_trail_is_trail (a: @alternating_trail V G n C alpha beta v u) : (toWalk a).IsTrail := sorry
+mutual
+inductive at_alpha {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)}
+  { α β : Fin n}: ∀ {v u : V}, G.Walk v u → Prop where
+  | cons_alpha : ∀ {v u w : V} {h : G.Adj v u} {p : G.Walk u w},
+      C ⟨s(v, u), by simp [h]⟩ = α →
+      at_beta p →
+      at_alpha (Walk.cons h p)
+inductive at_beta {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)}
+{ α β : Fin n} : ∀ {v u : V}, G.Walk v u → Prop where
+  | nil : ∀ {v : V}, at_beta (Walk.nil : G.Walk v v)
+  | cons_beta : ∀ {v u w : V} {h : G.Adj v u} {p : G.Walk u w},
+      C ⟨s(v, u), by simp [h]⟩ = β →
+      at_alpha p →
+      at_beta (Walk.cons h p)
+end
+
+def alt_prop {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)}
+{ α β : Fin n} {v u : V} : G.Walk v u -> Prop := fun w => (@at_alpha V G n C α β v u w) ∨ (@at_beta V G n C α β v u w)
+
+class alt_tr {V : Type} {G : SimpleGraph V} {n : ℕ} {C : EdgeColoring G (Fin n)} { α β : Fin n} {v u : V}  where
+  walk : G.Walk v u
+  is_path : walk.IsPath
+  alternating_property : @alt_prop V G n C α β v u walk
+
+class alt_tr_2 {V : Type} {G : SimpleGraph V} {n : ℕ} {C : EdgeColoring G (Fin n)} { α β : Fin n} {v u : V}  where
+  walk : G.Walk v u
+  is_path : walk.IsPath
+  alternating_property : @at_prop_2 V G n C α β v u walk
+
+
+lemma alt_prop_tail {V : Type} {G : SimpleGraph V} {n : ℕ} {C: EdgeColoring G (Fin n)}
+   { α β : Fin n} {u v : V} {w : G.Walk v u } {h : @at_alpha V G n C α β v u w } : @at_beta V G n C α β w.snd u w.tail := by
+  -- intro v u t₁ t₂  )
+  sorry
+
+
+
+lemma alt_tr_unique {V : Type} {G : SimpleGraph V} {n : ℕ} {C: EdgeColoring G (Fin n)}
+   { α β : Fin n} {u v : V} {w₁ w₂ : G.Walk v u } {h₁ : @at_prop_2 V G n C α β v u w₁ } {h₂ : @at_prop_2 V G n C α β v u w₂ }: w₁ = w₂ := by
+  -- intro v u t₁ t₂
+
+
+
+  sorry
+
+
+
 
 def R_reach {V : Type} {G : SimpleGraph V} {n: ℕ}
- {C: EdgeColoring G (Fin n)} {alpha beta : Fin n} {v: V}
-: V → Prop := fun z => Nonempty (@alternating_trail V G n C alpha beta v z)
+ {C: EdgeColoring G (Fin n)} {α β : Fin n} {v: V}
+: V → Prop := fun z => Nonempty (@alt_tr_2 V G n C α β v z)
 
 
 def prop_to_use : Finset (Sym2 V) → Prop :=
@@ -376,7 +367,6 @@ by_cases h_diag : Sym2.IsDiag e
   have he : (e ∈ edgeSet G_host) := by simp [G_host] ; exact h_diag
   have h_set_diff : (edgeSet G_S )  = edgeSet G_host \ ( {e} : Set (Sym2 V) ) := by
     dsimp
-    -- sorry
     exact insert_back_edgeset h_eS
   obtain ⟨ C ⟩ := IH
   have hC : ∀ {a b : ↑(edgeSet G_S)}, Adj (lineGraph G_S) a b → Adj ⊤ (C a) (C b) := by
@@ -394,7 +384,6 @@ by_cases h_diag : Sym2.IsDiag e
   have delta_comp :  Δ₁ ≤ Δ_host_1   := by
     dsimp
     rw [Nat.add_le_add_iff_right]
-    -- sorry
     exact (insert_back_degrees h_eS).left
   by_cases h_ab : alpha = beta
   · -- Assume alpha = beta is missing in both x and y
@@ -573,16 +562,30 @@ by_cases h_diag : Sym2.IsDiag e
             let other := Sym2.Mem.other hz_f₂
             have h_f₂_eq : s(y, other) = ↑f₂  := by exact Sym2.other_spec hz_f₂
             have nil_trail_y : R_y y := by
-              change R_reach y ; use @alternating_trail.nil V G_S Δ₁ C alpha beta y
+              change R_reach y ; use Walk.nil; exact Walk.IsPath.nil ; exact @at_prop_2.nil V G_S Δ₁ C alpha beta y
             have reachable : R_y other := by
               change R_reach other
               have h_edge : G_S.Adj other y := by rw [ Sym2.eq_swap ] at h_f₂_eq;  rw [← mem_edgeSet, h_f₂_eq] ; exact h_2G_S
-              have h_color : C ⟨ s(other , y ) , by rw [ Sym2.eq_swap ] at h_f₂_eq ; rw [ h_f₂_eq ] ; exact h_2G_S  ⟩  = alpha := by
-                have h_coerce_down : ( ⟨ s(other , y )  , by rw [ Sym2.eq_swap ] at h_f₂_eq ; rw [ h_f₂_eq ] ; exact h_2G_S  ⟩ : edgeSet G_S ) = ( ⟨ f₂, h_2G_S  ⟩  : edgeSet G_S) := sorry
+              have h_color : C ⟨ s(y , other ) , by  rw [ h_f₂_eq ] ; exact h_2G_S  ⟩  = alpha := by
+                have h_coerce_down : ( ⟨ s(y , other )  , by rw [ h_f₂_eq ] ; exact h_2G_S  ⟩ : edgeSet G_S ) = ( ⟨ f₂, h_2G_S  ⟩  : edgeSet G_S) := sorry
                 rw [ h_coerce_down ]
                 exact h_same_color.symm
-              -- sorry
-              use alternating_trail.na (alternating_trail.nil y) h_edge h_color
+              let candidate_walk := Walk.cons h_edge.symm (Walk.nil' other)
+              use candidate_walk
+              apply Walk.IsPath.cons
+              exact Walk.IsPath.nil
+              simp
+              exact ne_of_adj G_S h_edge.symm
+              have h_tail : candidate_walk.tail = Walk.nil := rfl
+              have h_second : candidate_walk.snd = other := rfl
+              apply @at_prop_2.mk V G_S Δ₁ C alpha beta
+              · change C ⟨ s(y , other ) , by  rw [ h_f₂_eq ] ; exact h_2G_S ⟩  = alpha  ; exact h_color
+              · rw [h_tail] ; exact @at_prop_2.nil V G_S Δ₁ C beta alpha other
+              · exact Walk.not_nil_cons
+
+
+
+
             change R_reach other at reachable
             have h_exists : ∃ ℓ₁ ℓ₂, s(ℓ₁, ℓ₂) = (f₂ : Sym2 V) ∧ R_y ℓ₁ ∧ R_y ℓ₂ := by
               use y, other
