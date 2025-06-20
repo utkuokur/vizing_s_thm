@@ -1,3 +1,5 @@
+--Written by Dr. Matthew Ballard and Utku Okur
+
 import Mathlib.Combinatorics.SimpleGraph.Coloring
 import Mathlib.Combinatorics.SimpleGraph.Walk
 import Mathlib.Tactic
