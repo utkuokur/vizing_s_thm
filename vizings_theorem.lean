@@ -28,10 +28,14 @@ theorem AdjacentAt.symm {v : V} {e₁ e₂ : edgeSet G} (h : AdjacentAt v e₁ e
 
 def Adjacent (e₁ e₂ : edgeSet G) : Prop := ∃ v, AdjacentAt v e₁ e₂
 
+lemma Adjacent_symm {e₁ e₂ : edgeSet G} (h : Adjacent e₁ e₂) : Adjacent e₂ e₁ := by
+obtain ⟨w,h'⟩ := h
+exact ⟨w, AdjacentAt.symm h'⟩
 
 def lineGraph (G : SimpleGraph V) : SimpleGraph (edgeSet G) where
   Adj := fun e₁ e₂ => Adjacent e₁ e₂ ∧ e₁ ≠ e₂
-  symm := by intro e₁ e₂ h ; obtain ⟨w,h'⟩ := h.left ; exact ⟨ ⟨w, AdjacentAt.symm h'⟩, h.right.symm ⟩
+  symm := by intro e₁ e₂ h ; exact ⟨ Adjacent_symm h.1, h.2.symm ⟩
+
 
 variable (G :  SimpleGraph V)
 
@@ -51,7 +55,7 @@ open Fintype Finset
 def edgeSpan : Set (edgeSet G) := fun e => Sym2.Mem v e
 def neighborSettoEdge (v' : neighborSet G v) : Sym2 V := s(v,v')
 
-theorem other_not_eq_given {x y : V} (hne : x ≠ y)(h₁ : x ∈ s(x,y)) : (Sym2.Mem.other h₁) = y := by
+lemma other_not_eq_given {x y : V} (hne : x ≠ y)(h₁ : x ∈ s(x,y)) : (Sym2.Mem.other h₁) = y := by
   have h : x ∈ s(x, y) :=
       Sym2.mem_iff.mpr <| .inl rfl
   have h' : (Sym2.Mem.other (h)) = x ∨ (Sym2.Mem.other (h)) = y := Sym2.mem_iff.mp (Sym2.other_mem h)
@@ -103,6 +107,16 @@ lemma reverse_not_nil {V : Type} {G : SimpleGraph V} {u v : V} (p : G.Walk u v)
     rw [ Walk.nil_iff_length_eq, Walk.length_reverse ] at *
     exact h₁ h₂
 
+lemma append_not_nil {V : Type} {G : SimpleGraph V} {u v z : V} {p : G.Walk v z}
+{r : G.Walk z u} {h_nil : ¬ r.Nil }  : ¬ (p.append r).Nil := by
+cases p with
+| nil => simpa
+| cons => rw [Walk.cons_append ] ; exact Walk.not_nil_cons
+
+lemma concat_not_nil {V : Type} {G : SimpleGraph V} {v u z: V} {h : G.Adj z u}
+{p : G.Walk v z} : ¬ (p.concat h).Nil := by simp [Walk.concat] ; apply append_not_nil ; simp
+
+
 lemma append_snd {V : Type} {G : SimpleGraph V} {u v w : V}
     (p : G.Walk u v) (r : G.Walk v w) (h : ¬ p.Nil) :
     p.snd = (p.append r).snd := by
@@ -122,7 +136,7 @@ theorem append_tail_eq_tail_append {p : G.Walk u v} {r : G.Walk v w} {h_nil : ¬
 
 --unused so far
 lemma cons_reverse_second {V : Type} {G : SimpleGraph V} {v u w: V} {h_adj : G.Adj u v}
-{p : G.Walk v w} {h_nil : ¬ p.Nil}: p.reverse.snd = (Walk.cons h_adj p).reverse.snd := by
+{p : G.Walk v w} (h_nil : ¬ p.Nil): p.reverse.snd = (Walk.cons h_adj p).reverse.snd := by
   induction p with
   | nil => simp at *
   | cons _ p' a_ih =>
@@ -359,6 +373,7 @@ constructor
 def walk_terminal_tail {V : Type} {G : SimpleGraph V} {v u : V} (p : G.Walk v u)
 : G.Walk v p.reverse.snd := p.reverse.tail.reverse
 
+
 inductive at_prop {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)} { α β : Fin n }
   : ∀ { v u : V }, G.Walk v u → Prop where
   | nil : ∀ {v : V}, at_prop (Walk.nil : G.Walk v v)
@@ -379,10 +394,10 @@ induction h_at_prop with
   | ab _ _ _ _ h_norepeat ih =>
     exact Walk.IsPath.cons ih h_norepeat
 
-class alt_path {V : Type} {G : SimpleGraph V} {n : ℕ} {C : EdgeColoring G (Fin n)}
-{ α β : Fin n} {v u : V}  where
-  walk : G.Walk v u
-  alternating_property : @at_prop V G n C α β v u walk
+-- class alt_path {V : Type} {G : SimpleGraph V} {n : ℕ} {C : EdgeColoring G (Fin n)}
+-- { α β : Fin n} {v u : V}  where
+--   walk : G.Walk v u
+--   alternating_property : @at_prop V G n C α β v u walk
 
 lemma copy_at_prop {V : Type} {G : SimpleGraph V} {v u v' u': V} {n:ℕ} {C : EdgeColoring G (Fin n)}
 { α β : Fin n} { p : G.Walk v u } { h₁ : v = v' } { h₂ : u = u' } :
@@ -465,7 +480,7 @@ apply at_prop.ab
 lemma reverse_snd_concat {V : Type} {G : SimpleGraph V} {v u₁ u₂ : V} {p : G.Walk v u₁}
 {h_adj : G.Adj u₁ u₂ } : (p.concat h_adj).reverse.snd = u₁ := by simp
 
-lemma terminal_tail_concat {V : Type} {G : SimpleGraph V} {v u₁ u₂ : V} {C : EdgeColoring G (Fin n)} { α β : Fin n}
+lemma terminal_tail_concat_at_prop {V : Type} {G : SimpleGraph V} {v u₁ u₂ : V} {C : EdgeColoring G (Fin n)} { α β : Fin n}
 {p : G.Walk v u₁} {h_adj : G.Adj u₁ u₂}
 {h_at_prop: @at_prop _ _ _ C α β _ _ (Walk.copy (walk_terminal_tail (p.concat h_adj)) rfl reverse_snd_concat) }
 : @at_prop _ _ _ C α β _ _  p := by
@@ -486,22 +501,53 @@ theorem concat_reverse {V : Type} {G : SimpleGraph V} {u v w : V} (p : G.Walk u 
   | nil => simp [ Walk.concat ]
   | cons h_edge p_ih => simp [ Walk.concat ]
 
-
-lemma concat_terminal_tail {V : Type} {G : SimpleGraph V} {v u : V}
-{p : G.Walk v u} {h_adj : G.Adj p.reverse.snd u} {h_nil : ¬ p.Nil}
-: (walk_terminal_tail p).concat h_adj =  p := by
-induction p with
-| nil=> simp at *
-| cons =>
-
-sorry
-
+lemma concat_copy {V : Type} {G : SimpleGraph V} {v₁ v₂ u v₁': V} {h_adj : G.Adj v₁ v₂}
+  {h_adj' : G.Adj v₁' v₂} {p : G.Walk u v₁} { h₂ : v₁ = v₁' }
+  : (p.copy rfl h₂).concat h_adj' = p.concat h_adj := by simp [Walk.copy] ; cases h₂ ; simp
 
 lemma rev_adj_snd {V : Type} {G : SimpleGraph V} {v u : V} {p : G.Walk v u} (hp : ¬ p.Nil) :
     G.Adj u p.reverse.snd:= by
     apply @Walk.adj_snd V G u v p.reverse
     apply reverse_not_nil
     assumption
+
+lemma reverse_elim {V : Type} {G : SimpleGraph V} {v u : V} {p₁ p₂ : G.Walk v u}
+: p₁.reverse = p₂.reverse  ↔ p₁ = p₂  := by
+constructor
+· intro ; apply Walk.reverse_injective ; assumption
+· intro h ; simp [h]
+
+lemma tail_of_eq {V : Type} {G : SimpleGraph V} {v u: V} {p₁ p₂ : G.Walk v u}
+ {h_snd: p₂.snd = p₁.snd} {_: p₁ = p₂}
+: p₁.tail = p₂.tail.copy h_snd rfl := by
+cases p₁ with
+|nil => subst_vars ; simp
+|cons h' p'  => subst_vars ; simp
+
+lemma concat_terminal_tail {V : Type} {G : SimpleGraph V} {v u z: V}
+{p : G.Walk v z} {h_adj: G.Adj z u}
+{h_eq : z =  ( p.concat h_adj ).reverse.snd}
+: (walk_terminal_tail ( p.concat h_adj )) = p.copy rfl h_eq := by
+simp [ walk_terminal_tail ]
+have h₁ : p.copy rfl h_eq = (p.copy rfl h_eq).reverse.reverse := by simp
+rw [h₁]
+apply reverse_elim.mpr
+have h_change : (p.concat h_adj).reverse.tail = (Walk.cons (G.symm h_adj) p.reverse).tail.copy (by simp) rfl := by
+  apply tail_of_eq
+  apply Walk.reverse_concat
+rw [h_change ]
+simp
+
+
+lemma terminal_tail_concat {V : Type} {G : SimpleGraph V} {v u: V}
+{p : G.Walk v u}  {h_nil : ¬ p.Nil}
+: (walk_terminal_tail p).concat (rev_adj_snd h_nil).symm = p := by
+induction p using @Walk.concatRec with
+| Hnil => simp at h_nil
+| Hconcat p' h'  a_ih =>
+cases p' using @Walk.concatRec with
+  | Hnil => simp [concat_terminal_tail]
+  | Hconcat => rw [concat_terminal_tail, concat_copy] ; simp
 
 lemma color_first_dart {V : Type} {G : SimpleGraph V} {n : ℕ} {C: EdgeColoring G (Fin n)}
 { α β : Fin n } {v u : V} {p: G.Walk v u} {h_nil : ¬ p.Nil} (h : @at_prop V G n C α β v u p )
@@ -535,7 +581,6 @@ apply same_color_impossible h_u1 h_u2
 exact h_neq
 rw [ <- h_color₂] at h_color₁
 exact h_color₁
-
 
 lemma at_prop_subsingleton {V : Type} {G : SimpleGraph V} {n : ℕ} {C: EdgeColoring G (Fin n)}
    { α β : Fin n} {v u : V} : Subsingleton {w : G.Walk v u //  @at_prop V G n C α β v u w } := by
@@ -575,20 +620,19 @@ apply @Walk.concatRec V G motive
     repeat assumption
   have h₁_tail_copy : @at_prop _ _ _ C β α _ _ (Walk.copy tail₁ rfl h_rev_snd) := by apply copy_at_prop.mp; apply h₁_tail
   have h₂_tail_copy : @at_prop _ _ _ C β α _ _ (Walk.copy tail₂ rfl h_rev_snd_2) := by apply copy_at_prop.mp; apply h₂_tail
-  have h_p1 : @at_prop _ _ _ C β α _ _ w₁' := @terminal_tail_concat _ _ _ _ _ _ _ _ _ _ _ h₁_tail_copy
+  have h_p1 : @at_prop _ _ _ C β α _ _ w₁' := @terminal_tail_concat_at_prop _ _ _ _ _ _ _ _ _ _ _ h₁_tail_copy
   specialize a_ih β α h_p1 (Walk.copy tail₂ rfl h_rev_snd_2) h₂_tail_copy
-  simp [a_ih, tail₂]
-  simp [Walk.copy ]
+  simp [a_ih, tail₂, Walk.copy]
   cases h_rev_snd_2
   simp
-  apply concat_terminal_tail
+  apply terminal_tail_concat
   simp
 repeat assumption
 
 
 def R_reach {V : Type} {G : SimpleGraph V} {n: ℕ}
  {C: EdgeColoring G (Fin n)} {α β : Fin n} {v: V}
-: V → Prop := fun z => Nonempty (@alt_path V G n C α β v z)
+: V → Prop := fun z => ∃ p : G.Walk v z, @at_prop V G n C α β v z p
 
 def prop_to_use : Finset (Sym2 V) → Prop :=
 fun S => Colorable (lineGraph (fromEdgeSet (toSet S))) (maxDegree (fromEdgeSet (toSet S)) + 1)
@@ -680,6 +724,7 @@ by_cases h_diag : e.IsDiag
       rw [ AdjacentAt, h_1e  ] at hz
       rcases hz with ⟨hz_e, hz_f₂⟩
       have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
+
       have touching_e_impossible (γ : Fin Δ₁ ) (h_γαβ : γ = alpha ∨ γ = beta) (u z : V)
       (h_gamma : γ ∈  Set.diff (@Set.univ (Fin Δ₁)) (C '' (edgeSpan G_S u)) )
       (h_zu :  z = u ) (hz_e :  Sym2.Mem z e ) ( hz_f₂ : Sym2.Mem z f₂ ) : False := by
@@ -720,9 +765,11 @@ by_cases h_diag : e.IsDiag
         rw [ h_12eval ] at h_adj_top
         simp at h_adj_top
   let R_y : V → Prop := fun z => @R_reach V G_S Δ₁ C alpha beta y z
+
   · -- alpha ≠ beta
     by_cases hp : @R_reach V G_S Δ₁ C alpha beta y x
     · -- tough part
+
       sorry
     · -- if there is no alternating path from y to x, then we can color with only Δ_host_1 colors, not needing an extra color.
       -- this is done by interchanging alpha and beta in the paths originating from y and coloring e by alpha
@@ -745,15 +792,13 @@ by_cases h_diag : e.IsDiag
       C_alt ⟨ f, h_f ⟩
 
       use C_extension_alt
-      intro f₁ f₂ h_adj
-      change Ne (C_extension_alt f₁) (C_extension_alt f₂)
-      by_contra h_same_color
-      have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
-      have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
-
-      by_cases h_1e : (f₁ :Sym2 V) = e
-      · -- f₁ = e ≠ f₂
+      have h_e_f (f₁ f₂ : (edgeSet G_host )) (h_1e : (f₁:Sym2 V) = e)
+      (h_adj : (lineGraph G_host).Adj f₁ f₂)
+      : (C_extension_alt f₁ ≠ C_extension_alt f₂) := by
         have h_1eval : C_extension_alt f₁ = alpha  := by dsimp [C_extension_alt] ; simp [h_1e]
+        by_contra h_same_color
+        have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
+        have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
         have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
         have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
         have h_2eval : C_extension_alt f₂ = C_alt ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
@@ -778,12 +823,10 @@ by_cases h_diag : e.IsDiag
           dsimp at h_alpha
           exact h_alpha.right h_alpha_in_image
 
-        rw [Adj, lineGraph] at h_adj
-        simp only at h_adj
+        simp [Adj, lineGraph] at h_adj
         unfold Adjacent at h_adj
         obtain ⟨ z, hz ⟩ := h_adj.left
         rw [ AdjacentAt, h_1e  ] at hz
-
         rcases hz with ⟨hz_e, hz_f₂⟩
         have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
         split_ifs at h_same_color with exists_trail change_α_2_β change_β_2_α
@@ -814,17 +857,18 @@ by_cases h_diag : e.IsDiag
             let other := Sym2.Mem.other hz_f₂
             have h_f₂_eq : s(y, other) = ↑f₂  := by exact Sym2.other_spec hz_f₂
             have nil_trail_y : R_y y := by
-              change R_reach y ; use Walk.nil ; exact @at_prop.nil V G_S Δ₁ C alpha beta y
+              change R_reach y ; use Walk.nil ; exact at_prop.nil
             have reachable : R_y other := by
               change R_reach other
               have h_edge : G_S.Adj other y := by rw [ Sym2.eq_swap ] at h_f₂_eq;  rw [← mem_edgeSet, h_f₂_eq] ; exact h_2G_S
               have h_color : C ⟨ s(y , other ) , by  rw [ h_f₂_eq ] ; exact h_2G_S  ⟩  = alpha := by
-                have h_coerce_down : ( ⟨ s(y , other )  , by rw [ h_f₂_eq ] ; exact h_2G_S  ⟩ : edgeSet G_S ) = ( ⟨ f₂, h_2G_S  ⟩  : edgeSet G_S) := sorry
+                have h_coerce_down : ( ⟨ s(y , other )  , by rw [ h_f₂_eq ] ; exact h_2G_S  ⟩ : edgeSet G_S )
+                 = ( ⟨ f₂, h_2G_S  ⟩  : edgeSet G_S) := by simp ; assumption
                 rw [ h_coerce_down ]
                 exact h_same_color.symm
               use Walk.cons h_edge.symm (Walk.nil' other)
-              apply @at_prop.ba V G_S Δ₁ C alpha beta
-              exact (@at_prop.nil V G_S Δ₁ C alpha beta other)
+              apply at_prop.ba
+              exact at_prop.nil
               exact h_color
               simp
               exact (Adj.ne h_edge).symm
@@ -833,15 +877,28 @@ by_cases h_diag : e.IsDiag
             have h_exists : ∃ ℓ₁ ℓ₂, s(ℓ₁, ℓ₂) = (f₂ : Sym2 V) ∧ R_y ℓ₁ ∧ R_y ℓ₂ := by
               use y, other
             exact exists_trail h_exists
+
+      intro f₁ f₂ h_adj
+      change (C_extension_alt f₁) ≠ (C_extension_alt f₂)
+      have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
+      have h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
+
+      by_cases h_1e : (f₁ :Sym2 V) = e
+
+      · -- f₁ = e ≠ f₂
+        exact h_e_f f₁ f₂ h_1e h_adj
+
       · -- e ≠ f₁
         by_cases h_2e : (f₂ :Sym2 V) = e
-        · -- EASY SYMMETRY f₂ = e ≠ f₁ symmetric to the case above.
-          sorry
+        · -- f₂ = e ≠ f₁ symmetric to the case above.
+          exact (h_e_f f₂ f₁ h_2e h_adj.symm).symm
         · -- f₂ ≠  e ≠ f₁
+
           have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.property, h_1e⟩
           have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
           have h_1eval : C_extension_alt f₁ = C_alt ⟨f₁, h_1G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_1e]
           have h_2eval : C_extension_alt f₂ = C_alt ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
+          intro h_same_color
           rw [ h_2eval, h_1eval ] at h_same_color
           dsimp [C_alt ] at h_same_color
           have h_adj_G_S : (lineGraph G_S).Adj ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
@@ -850,6 +907,8 @@ by_cases h_diag : e.IsDiag
             unfold Adjacent at *
             obtain ⟨ z, hz ⟩ := h_adj.left
             rw [ AdjacentAt  ] at hz
+
+
             constructor
             · use z
               rw [AdjacentAt]
@@ -868,6 +927,7 @@ by_cases h_diag : e.IsDiag
           · exact h_ab h_same_color.symm
           · exact f2_β_neg h_same_color.symm
           ·
+
             sorry
           · exact h_ab h_same_color
           · rw [<- f2_β ] at C_f1_β
@@ -881,11 +941,14 @@ by_cases h_diag : e.IsDiag
           · exact h_C_different h_same_color
           · exact h_C_different h_same_color
           ·
+
             sorry
           ·
             sorry
           · exact h_C_different h_same_color
           · exact h_C_different h_same_color
+
+
 
 lemma line_G_colorable_induced {V : Type}  {G : SimpleGraph V} [ DecidableRel G.Adj] [ h₁ : Fintype V] [h₂ : DecidableEq V] : prop_to_use (G.edgeSet).toFinset := by
 apply Finset.induction_on
