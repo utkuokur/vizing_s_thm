@@ -928,7 +928,6 @@ constructor
   exact ⟨hfeS.resolve_left hfe, hf⟩
 
 
-
 lemma max_degree_mono  {V : Type} [ Fintype V] [ DecidableEq V]  {G H : SimpleGraph V} {h_mono : G ≤ H} :
 maxDegree ( G ) ≤ maxDegree ( H ) := by
 apply maxDegree_le_of_forall_degree_le
@@ -941,7 +940,6 @@ have h_GH_v : (G.degree v) ≤ (H.degree v) := by
   exact h_mono hw
 have h_2 : (H.degree v) ≤ maxDegree ( H ) := by apply degree_le_maxDegree
 exact le_trans h_GH_v h_2
-
 
 lemma insert_back_degrees {V : Type} [ Fintype V] [ DecidableEq V ]  {e : (Sym2 V)} {S : Finset (Sym2 V)} :
 maxDegree ( (fromEdgeSet S.toSet)) ≤ maxDegree ( fromEdgeSet ((insert e S).toSet) )
@@ -1018,6 +1016,7 @@ have hcard : 0 < ((@Set.univ (Fin ( G.maxDegree  + 1))).toFinset).card - ((C '' 
     exact degree_le_maxDegree G u
 exact subset_card_ne_implies_nonempty_diff h_sub hcard
 
+abbrev eg ( S: Finset (Sym2 V) ) : SimpleGraph V := (fromEdgeSet (toSet S)) --edge-induced-graph
 
 def prop_to_use : Finset (Sym2 V) → Prop :=
 fun S => Colorable (lineGraph (fromEdgeSet (toSet S))) (maxDegree (fromEdgeSet (toSet S)) + 1)
@@ -1033,7 +1032,7 @@ have h₂ : 0 ≤ 1 := by exact Nat.zero_le 1
 apply Colorable.mono h₂
 apply @colorable_of_isEmpty
 
-noncomputable instance induced_decidable {V : Type} [ Fintype V ] [ DecidableEq V] {S : Finset (Sym2 V)}
+noncomputable instance induced_decidable {V : Type} [ Fintype V ] [ DecidableEq V ] {S : Finset (Sym2 V)}
 : DecidableRel ( (fromEdgeSet (toSet S)).Adj ) := by exact Classical.decRel ((fromEdgeSet (toSet S)).Adj)
 
 lemma path_concat {V : Type} {G : SimpleGraph V} {v u₁ u₂: V}
@@ -1041,7 +1040,279 @@ lemma path_concat {V : Type} {G : SimpleGraph V} {v u₁ u₂: V}
 simp [Walk.concat] at h_path
 exact Walk.IsPath.of_append_left h_path
 
-theorem prop_insert_edge {V : Type} [ Fintype V ] [ DecidableEq V] {G : SimpleGraph V} [ DecidableRel G.Adj]  :
+lemma extending_edge_coloring_helper {V : Type} [ Fintype V ] [ DecidableEq V ]
+{S : Finset (Sym2 V)} {e: Sym2 V } {h_eS: e ∉ S } {n: ℕ} {α β : (Fin n)}
+{C: EdgeColoring (eg S) (Fin n)} {x y :V} {h_exy : e = s(x,y) }
+{h_xα: α ∉ (C '' (edgeSpan (eg S) x)) } {{h_yβ: β ∉ (C '' (edgeSpan (eg S) y)) }}
+{hp : ¬ @R_reach V (eg S) n C α β y x }
+: Colorable (lineGraph (eg (insert e S))) n := by
+let G_S := eg S
+let G_host := (eg (insert e S))
+change Colorable (lineGraph G_host ) n
+have hC : ∀ {a b : ↑(edgeSet G_S)}, Adj (lineGraph G_S) a b → Adj ⊤ (C a) (C b) := by
+  intro f₁ f₂ h₁₇
+  change Ne (C f₁) (C f₂)
+  exact Coloring.valid C h₁₇
+
+have h_set_diff : (edgeSet G_S )  = edgeSet G_host \ ( {e} : Set (Sym2 V) ) := by
+    dsimp
+    exact insert_edgeset h_eS
+
+by_cases h_ab : α = β
+· -- Assume α = β is missing in both x and y
+  let C_extension_alt : edgeSet G_host → (Fin n) := fun f =>
+  if h_ef: f = e then α else
+  have h_f : f.val ∈ (edgeSet G_S) := by
+    rw [ h_set_diff ]
+    exact ⟨f.property, h_ef⟩
+  (C ⟨ f, h_f ⟩)
+  use C_extension_alt
+  intro f₁ f₂ h_adj
+  change Ne (C_extension_alt f₁) (C_extension_alt f₂)
+  intro h_same_color
+  have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
+  have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := @lift_edge_type V G_host f₁ f₂ h_diff
+
+  have symmetric_argument_f12 (f₁ f₂ : edgeSet G_host ) (h_1e : (f₁ : Sym2 V) = e)
+    (h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) ) (h_same_color : C_extension_alt f₁ = C_extension_alt f₂)
+    (h_adj : Adj (lineGraph G_host) f₁ f₂) : False := by
+    have h_1eval : C_extension_alt f₁ = α  := by dsimp [C_extension_alt] ; simp [h_1e]
+    have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
+    have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
+    have h_2eval : C_extension_alt f₂ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
+    rw [ h_1eval, h_2eval  ] at h_same_color
+
+    rw [Adj, lineGraph ] at h_adj
+    simp only at h_adj
+    unfold Adjacent at h_adj
+    obtain ⟨ z, hz ⟩ := h_adj.left
+    rw [ AdjacentAt, h_1e  ] at hz
+    rcases hz with ⟨hz_e, hz_f₂⟩
+    have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
+
+    have touching_e_impossible (γ : Fin n ) (h_γαβ : γ = α ∨ γ = β) (u z : V)
+    (h_gamma : γ ∉ (C '' (edgeSpan G_S u)) )
+    (h_zu :  z = u ) (hz_e :  Sym2.Mem z e ) ( hz_f₂ : Sym2.Mem z f₂ ) : False := by
+      have h_same_color_γ : γ = C { val := ↑f₂, property := h_2G_S } := by
+        cases h_γαβ with
+        | inl h_γα => rw [← h_γα] at h_same_color ; exact h_same_color
+        | inr h_γβ => rw [← h_ab ] at h_γβ ; rw [← h_γβ ] at h_same_color ; exact h_same_color
+
+      have h_f2_span_u :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S u) := by rw [← h_zu] ; exact hz_f₂
+      have h_gamma_in_image : γ ∈ C '' edgeSpan G_S u := by use ⟨ f₂, h_2G_S ⟩ ; exact ⟨ h_f2_span_u , h_same_color_γ.symm ⟩
+      contradiction
+
+    cases h_zxy with
+    | inl h_zx  =>
+    exact touching_e_impossible α (Or.inl rfl) x z h_xα h_zx  hz_e hz_f₂
+    | inr h_zy =>
+    exact touching_e_impossible β (Or.inr rfl) y z h_yβ h_zy hz_e hz_f₂
+
+  by_cases h_1e : (f₁ :Sym2 V) = e
+  · exact symmetric_argument_f12 f₁ f₂ h_1e h_diff_sym2 h_same_color h_adj
+  · by_cases h_2e : (f₂ :Sym2 V) = e
+    · exact symmetric_argument_f12 f₂ f₁ h_2e h_diff_sym2.symm h_same_color.symm h_adj.symm
+    · have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.property, h_1e⟩
+      have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
+      have h_12eval : C ⟨f₁, h_1G_S ⟩ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] at h_same_color ; simp [h_1e, h_2e] at h_same_color ; exact h_same_color
+      have adjacent_line_G_S : Adj (lineGraph G_S) ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
+        rw [Adj , lineGraph]
+        constructor
+        · rw [Adj, lineGraph] at h_adj
+          exact h_adj.left
+        · intro hf12
+          rw [Subtype.mk.injEq] at hf12
+          exact h_diff_sym2 hf12
+
+      have h_adj_top : Adj ⊤ (C ⟨f₁, h_1G_S ⟩) (C ⟨f₂, h_2G_S ⟩) := hC adjacent_line_G_S
+      rw [ h_12eval ] at h_adj_top
+      simp at h_adj_top
+
+·
+  let R_y : V → Prop := fun z => @R_reach V G_S n C α β y z
+  let E_y : edgeSet G_S → Prop := fun f =>
+    ∃ (ℓ₁ ℓ₂ : V), ∃ (p: G_S.Walk ℓ₁ y), @edge_used V G_S n C α β y ℓ₁ ℓ₂ p f
+
+  let C_alt : (edgeSet G_S → (Fin n)) := fun f =>
+    if E_y f then
+      if C f = α then β
+      else if C f = β then α
+      else C f
+    else C f
+
+  let C_extension_alt : edgeSet G_host → (Fin n) := fun f =>
+  if h_ef: f = e then α
+  else
+  have h_f : f.val ∈ (edgeSet G_S) := by
+    rw [ h_set_diff ]
+    exact ⟨f.property, h_ef⟩
+  C_alt ⟨ f, h_f ⟩
+
+  use C_extension_alt
+
+  have h_e_f (f₁ f₂ : (edgeSet G_host )) (h_1e : (f₁:Sym2 V) = e)
+  (h_adj : (lineGraph G_host).Adj f₁ f₂)
+  : (C_extension_alt f₁ ≠ C_extension_alt f₂) := by
+    have h_1eval : C_extension_alt f₁ = α  := by dsimp [C_extension_alt] ; simp [h_1e]
+    by_contra h_same_color
+    have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
+    have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
+    have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
+    have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
+    have h_2eval : C_extension_alt f₂ = C_alt ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
+    rw [ h_2eval, h_1eval ] at h_same_color
+    dsimp [C_alt ] at h_same_color
+
+    have touching_e_impossible_β ( hz_f₂ : Sym2.Mem y f₂ )
+    (change_β_2_α : C ⟨ f₂, h_2G_S ⟩  = β  )
+    : False := by
+      have h_f2_span_y :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S y) := by exact hz_f₂
+      have h_β_in_image : β ∈ C '' edgeSpan G_S y := by use ⟨ f₂, h_2G_S ⟩
+      contradiction
+
+    have touching_e_impossible_α ( hz_f₂ : Sym2.Mem x f₂ )
+    (colored_α : α = C { val := ↑f₂, property := h_2G_S } )
+    : False := by
+      have h_f2_span_x :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S x) := by exact hz_f₂
+      have h_α_in_image : α ∈ C '' edgeSpan G_S x := by use ⟨ f₂, h_2G_S ⟩ ; exact ⟨ h_f2_span_x , colored_α.symm ⟩
+      contradiction
+
+    simp [Adj, lineGraph] at h_adj
+    unfold Adjacent at h_adj
+    obtain ⟨ z, hz ⟩ := h_adj.left
+    rw [ AdjacentAt, h_1e  ] at hz
+    rcases hz with ⟨hz_e, hz_f₂⟩
+    have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
+    split_ifs at h_same_color with exists_trail change_α_2_β change_β_2_α
+    · --DONE exists_trail, change_α_2_β
+      exact h_ab h_same_color
+    · --DONE exists_trail, change_β_2_α
+      cases h_zxy with
+      | inl  h_zx =>
+        rcases exists_trail with ⟨ℓ₁, ℓ₂, p, h_ed, alt_prop⟩
+        have h_x_mem : x = ℓ₁ ∨ x = ℓ₂ := by rw [ h_zx, <- h_ed, Sym2.mem_iff'] at hz_f₂ ; exact hz_f₂.symm
+        have yx_trail: (R_y x) := by
+          dsimp [R_y, R_reach ]
+          cases h_x_mem with
+          | inl h_x_v₁ => rw [h_x_v₁] ; use p ; cases alt_prop ; repeat assumption
+          | inr h_x_v₂ => rw [h_x_v₂] ; use (Walk.cons (adj_of_edge h_ed) p)
+        exact hp yx_trail
+      | inr  h_zy =>
+        rw [ h_zy ] at hz_f₂
+        exact touching_e_impossible_β hz_f₂ change_β_2_α
+    · -- DONE exists_trail, neither α nor β, no change
+      exact change_α_2_β h_same_color.symm
+    · -- DONE exists NO trail, no change
+      cases h_zxy with
+      | inl  h_zx =>
+        rw [ h_zx ] at hz_f₂
+        exact touching_e_impossible_α hz_f₂ h_same_color
+      | inr  h_zy =>
+        rw [ h_zy ] at hz_f₂
+        let other := Sym2.Mem.other hz_f₂
+        have h_f₂_eq : s(other, y) = ↑f₂  := by rw [Sym2.eq_swap] ; exact Sym2.other_spec hz_f₂
+        have h_adj_trail : G_S.Adj other y := by apply @adj_of_edge V G_S y other ⟨ f₂, h_2G_S⟩ h_f₂_eq
+
+        have h_used : E_y ⟨ f₂, h_2G_S⟩  := by
+          simp [E_y]
+          use y, other, Walk.nil' y
+          refine { h_ed := ?_, alt_prop := ?_ }
+          · exact h_f₂_eq
+          · apply at_prop.ba ; exact at_prop.nil ; symm ;
+            simp [<- h_f₂_eq] at h_same_color ; exact h_same_color ; simp ; exact (Adj.ne h_adj_trail )
+        exact exists_trail h_used
+
+  intro f₁ f₂ h_adj
+  change (C_extension_alt f₁) ≠ (C_extension_alt f₂)
+  have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
+  have h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
+
+  by_cases h_1e : (f₁ :Sym2 V) = e
+
+  · -- f₁ = e ≠ f₂
+    exact h_e_f f₁ f₂ h_1e h_adj
+  · -- e ≠ f₁
+    by_cases h_2e : (f₂ :Sym2 V) = e
+    · -- f₂ = e ≠ f₁ symmetric to the case above.
+      exact (h_e_f f₂ f₁ h_2e h_adj.symm).symm
+    · -- f₂ ≠  e ≠ f₁
+      have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.property, h_1e⟩
+      have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
+      have h_1eval : C_extension_alt f₁ = C_alt ⟨f₁, h_1G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_1e]
+      have h_2eval : C_extension_alt f₂ = C_alt ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
+      intro h_same_color
+      rw [ h_2eval, h_1eval ] at h_same_color
+      dsimp [C_alt ] at h_same_color
+      have h_adj_G_S : (lineGraph G_S).Adj ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
+        rw [Adj, lineGraph ] at *
+        simp only at *
+        unfold Adjacent at *
+        obtain ⟨ z, hz ⟩ := h_adj.left
+        rw [ AdjacentAt  ] at hz
+
+        constructor
+        · use z
+          rw [AdjacentAt]
+          exact hz
+        · intro h
+          have h_fst_eq : (⟨f₁, h_1G_S⟩ : { x // x ∈ G_S.edgeSet }).val = (⟨f₂, h_2G_S⟩ : { x // x ∈ G_S.edgeSet }).val := congr_arg Subtype.val h
+          simp only [Subtype.val] at h_fst_eq
+          exact h_diff_sym2 h_fst_eq
+      have h_C_different : C ⟨f₁, h_1G_S ⟩ ≠ C ⟨f₂, h_2G_S ⟩ := by
+        exact Adj.ne (hC h_adj_G_S)
+
+      split_ifs at h_same_color
+      with trail_f1 C_f1_α trail_f2_neg f2_α f2_β_neg C_f1_β trail_f2_neg f2_α_neg f2_β _ _ _ trail_f2 f2_α_neg f2_β
+      · rw [<- f2_α  ] at C_f1_α
+        exact h_C_different C_f1_α
+      · exact h_ab h_same_color.symm
+      · exact f2_β_neg h_same_color.symm
+      · --f₁ reachable with α implies f₂ reachable extending with β
+        have f_2_reachable : E_y ⟨ f₂, h_2G_S ⟩  := by
+          apply extend_reachable G_S y ⟨ f₁, h_1G_S ⟩ ⟨ f₂, h_2G_S ⟩ h_adj_G_S trail_f1 α β C_f1_α h_same_color.symm
+          repeat simp
+          exact h_ab
+          exact h_yβ
+
+        exact trail_f2_neg f_2_reachable
+      · exact h_ab h_same_color
+      · rw [<- f2_β ] at C_f1_β
+        exact h_C_different C_f1_β
+      · exact f2_α_neg h_same_color.symm
+      · --f₁ reachable with β implies f₂ reachable extending with α
+        have f_2_reachable : E_y ⟨ f₂, h_2G_S ⟩  := by
+          apply extend_reachable G_S y ⟨ f₁, h_1G_S ⟩ ⟨ f₂, h_2G_S ⟩ h_adj_G_S trail_f1 β α C_f1_β h_same_color.symm
+          repeat simp
+          apply Ne.elim
+          symm
+          exact h_ab
+          exact h_yβ
+        exact trail_f2_neg f_2_reachable
+
+      · exact C_f1_β h_same_color
+      · exact C_f1_α h_same_color
+      · exact h_C_different h_same_color
+      · exact h_C_different h_same_color
+      · --f₂ reachable with β implies f₁ reachable extending with α
+        have f_1_reachable : E_y ⟨ f₁, h_1G_S ⟩  := by
+          apply extend_reachable G_S y ⟨ f₂, h_2G_S ⟩ ⟨ f₁, h_1G_S ⟩ h_adj_G_S.symm trail_f2 α β f2_α_neg h_same_color
+          repeat simp
+          exact h_ab
+          exact h_yβ
+        exact trail_f1 f_1_reachable
+      · --f₂ reachable with β implies f₁ reachable extending with α
+        have f_1_reachable : E_y ⟨ f₁, h_1G_S ⟩  := by
+          apply extend_reachable G_S y ⟨ f₂, h_2G_S ⟩ ⟨ f₁, h_1G_S ⟩ h_adj_G_S.symm trail_f2 β α f2_β h_same_color
+          repeat simp
+          apply Ne.elim
+          symm
+          exact h_ab
+          exact h_yβ
+        exact trail_f1 f_1_reachable
+      · exact h_C_different h_same_color
+      · exact h_C_different h_same_color
+
+theorem prop_insert_edge {V : Type} [ Fintype V ] [ DecidableEq V]  :
 ∀ ⦃e : (Sym2 V)⦄ {S : Finset (Sym2 V)}, e ∉ S → prop_to_use S → prop_to_use (insert e S) := by
 intro e S h_eS IH
 rw [prop_to_use] at *
@@ -1051,6 +1322,7 @@ change Colorable (lineGraph G_S ) Δ₁ at IH
 let G_host := fromEdgeSet (toSet (insert e S))
 let Δ_host_1 := ( maxDegree G_host ) + 1
 change Colorable (lineGraph G_host ) Δ_host_1
+
 by_cases h_diag : e.IsDiag
 · -- e is diagonal, and eliminated while forming G_host
   have h_loop : G_host = G_S := by simp [G_host, G_S] ; exact @insert_edgeset_diag V _ _ e h_diag (toSet S)
@@ -1072,296 +1344,52 @@ by_cases h_diag : e.IsDiag
     exact Coloring.valid C h₁₇
   let x :=  e.out.1
   have h_xe : x ∈ e := Sym2.out_fst_mem e
-  let y := Sym2.Mem.other h_xe
-  have h_ye : y ∈ e := Sym2.other_mem h_xe
-  have h_xy : y ≠ x := Sym2.other_ne h_diag h_xe
-  have h_exy : e = s(x,y) := (Sym2.mem_and_mem_iff h_xy.symm).mp ⟨ h_xe, h_ye ⟩
+  let y₀ := Sym2.Mem.other h_xe
+  have h_ye : y₀ ∈ e := Sym2.other_mem h_xe
+  have h_xy : y₀ ≠ x := Sym2.other_ne h_diag h_xe
+  have h_exy : e = s(x,y₀) := (Sym2.mem_and_mem_iff h_xy.symm).mp ⟨ h_xe, h_ye ⟩
+
   obtain ⟨α,h_α⟩ := missing_color (fromEdgeSet (toSet S)) C x
-  obtain ⟨β,h_β⟩ := missing_color (fromEdgeSet (toSet S)) C y
+  obtain ⟨β,h_β⟩ := missing_color (fromEdgeSet (toSet S)) C y₀
   have delta_comp :  Δ₁ ≤ Δ_host_1   := by
     dsimp
     rw [Nat.add_le_add_iff_right]
     exact (insert_back_degrees).left
-  by_cases h_ab : α = β
-  · -- Assume α = β is missing in both x and y
-    apply Colorable.mono delta_comp
-    let C_extension_alt : edgeSet G_host → (Fin Δ₁) := fun f =>
-    if h_ef: f = e then α else
-    have h_f : f.val ∈ (edgeSet G_S) := by
-      have h_f_host : f.val  ∈ edgeSet G_host := f.property
-      rw [ h_set_diff ]
-      exact ⟨h_f_host, h_ef⟩
-    (C ⟨ f, h_f ⟩)
-    use C_extension_alt
-    intro f₁ f₂ h_adj
-    change Ne (C_extension_alt f₁) (C_extension_alt f₂)
-    intro h_same_color
-    have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
-    have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := @lift_edge_type V G_host f₁ f₂ h_diff
 
-    have symmetric_argument_f12 (f₁ f₂ : edgeSet G_host ) (h_1e : (f₁ : Sym2 V) = e) (h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) )
-      (h_same_color : C_extension_alt f₁ = C_extension_alt f₂)
-      (h_adj : Adj (lineGraph G_host) f₁ f₂) : False := by
-      have h_1eval : C_extension_alt f₁ = α  := by dsimp [C_extension_alt] ; simp [h_1e]
-      have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
-      have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
-      have h_2eval : C_extension_alt f₂ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
-      rw [ h_1eval, h_2eval  ] at h_same_color
+  let R_y : V → Prop := fun z => @R_reach V G_S Δ₁ C α β y₀ z
+  by_cases hp : @R_reach V G_S Δ₁ C α β y₀ x
+  ·
+  -- · let rec build_sequence : List V → List V
+  --   | [] => []
+  --   | y_i :: ys =>
+  --     let candidates := (G_S.neighborFinset x).filter (fun z => C ⟨ s(x, z), by sorry ⟩  ∉ C '' edgeSpan G_S y_i)
+  --     if h : ∃ z, z ∈ candidates then
+  --       let z := h.choose
+  --       z :: build_sequence (z :: y_i :: ys)
+  --     else
+  --       y_i :: ys
+  --   termination_by
+  --   sorry
 
-      rw [Adj, lineGraph ] at h_adj
-      simp only at h_adj
-      unfold Adjacent at h_adj
-      obtain ⟨ z, hz ⟩ := h_adj.left
-      rw [ AdjacentAt, h_1e  ] at hz
-      rcases hz with ⟨hz_e, hz_f₂⟩
-      have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
-
-      have touching_e_impossible (γ : Fin Δ₁ ) (h_γαβ : γ = α ∨ γ = β) (u z : V)
-      (h_gamma : γ ∈  Set.diff (@Set.univ (Fin Δ₁)) (C '' (edgeSpan G_S u)) )
-      (h_zu :  z = u ) (hz_e :  Sym2.Mem z e ) ( hz_f₂ : Sym2.Mem z f₂ ) : False := by
-        have h_same_color_γ : γ = C { val := ↑f₂, property := h_2G_S } := by
-          cases h_γαβ with
-          | inl h_γα => rw [← h_γα] at h_same_color ; exact h_same_color
-          | inr h_γβ => rw [← h_ab ] at h_γβ ; rw [← h_γβ ] at h_same_color ; exact h_same_color
-
-        have h_f2_span_u :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S u) := by rw [← h_zu] ; exact hz_f₂
-        have h_gamma_in_image : γ ∈ C '' edgeSpan G_S u := by use ⟨ f₂, h_2G_S ⟩ ; exact ⟨ h_f2_span_u , h_same_color_γ.symm ⟩
-        rw [Set.diff] at h_gamma
-        dsimp at h_gamma
-        exact h_gamma.right h_gamma_in_image
-
-      cases h_zxy with
-      | inl h_zx  =>
-      exact touching_e_impossible α (Or.inl rfl) x z h_α h_zx  hz_e hz_f₂
-      | inr h_zy =>
-      exact touching_e_impossible β (Or.inr rfl) y z h_β h_zy hz_e hz_f₂
-
-    by_cases h_1e : (f₁ :Sym2 V) = e
-    · exact symmetric_argument_f12 f₁ f₂ h_1e h_diff_sym2 h_same_color h_adj
-    · by_cases h_2e : (f₂ :Sym2 V) = e
-      · exact symmetric_argument_f12 f₂ f₁ h_2e h_diff_sym2.symm h_same_color.symm h_adj.symm
-      · have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.property, h_1e⟩
-        have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
-        have h_12eval : C ⟨f₁, h_1G_S ⟩ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] at h_same_color ; simp [h_1e, h_2e] at h_same_color ; exact h_same_color
-        have adjacent_line_G_S : Adj (lineGraph G_S) ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
-          rw [Adj , lineGraph]
-          constructor
-          · rw [Adj, lineGraph] at h_adj
-            exact h_adj.left
-          · intro hf12
-            rw [Subtype.mk.injEq] at hf12
-            exact h_diff_sym2 hf12
-        have h_adj_top : Adj ⊤ (C ⟨f₁, h_1G_S ⟩) (C ⟨f₂, h_2G_S ⟩) := hC adjacent_line_G_S
-        rw [ h_12eval ] at h_adj_top
-        simp at h_adj_top
+    sorry
+  · apply Colorable.mono delta_comp
+    have h_yβ : β ∉ C '' edgeSpan G_S y₀ := by
+      rw [Set.diff] at h_β
+      exact h_β.2
+    have h_xα : α ∉ C '' edgeSpan G_S x := by
+      rw [Set.diff] at h_α
+      exact h_α.2
+    apply extending_edge_coloring_helper
+    repeat assumption
 
 
-
-  let R_y : V → Prop := fun z => @R_reach V G_S Δ₁ C α β y z
-
-  · -- α ≠ β
-    by_cases hp : @R_reach V G_S Δ₁ C α β y x
-    · -- tough part
-
-      sorry
-    · -- if there is no alternating path from y to x, then we can color with only Δ_host_1 colors, not needing an extra color.
-      -- this is done by interchanging α and β in the paths originating from y and coloring e by α
-      apply Colorable.mono delta_comp
-      let E_y : edgeSet G_S → Prop := fun f =>
-      ∃ (ℓ₁ ℓ₂ : V), ∃ (p: G_S.Walk ℓ₁ y), @edge_used V G_S Δ₁ C α β y ℓ₁ ℓ₂ p f
-      let C_alt : (edgeSet G_S → (Fin Δ₁)) := fun f =>
-        if E_y f then
-          if C f = α then β
-          else if C f = β then α
-          else C f
-        else C f
-
-      let C_extension_alt : edgeSet G_host → (Fin Δ₁) := fun f =>
-      if h_ef: f = e then α
-      else
-      have h_f : f.val ∈ (edgeSet G_S) := by
-        rw [ h_set_diff ]
-        exact ⟨f.property, h_ef⟩
-      C_alt ⟨ f, h_f ⟩
-
-      use C_extension_alt
-      have h_e_f (f₁ f₂ : (edgeSet G_host )) (h_1e : (f₁:Sym2 V) = e)
-      (h_adj : (lineGraph G_host).Adj f₁ f₂)
-      : (C_extension_alt f₁ ≠ C_extension_alt f₂) := by
-        have h_1eval : C_extension_alt f₁ = α  := by dsimp [C_extension_alt] ; simp [h_1e]
-        by_contra h_same_color
-        have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
-        have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
-        have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
-        have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
-        have h_2eval : C_extension_alt f₂ = C_alt ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
-        rw [ h_2eval, h_1eval ] at h_same_color
-        dsimp [C_alt ] at h_same_color
-
-        have touching_e_impossible_β ( hz_f₂ : Sym2.Mem y f₂ )
-        (change_β_2_α : C { val := ↑f₂, property := h_2G_S } = β  )
-        : False := by
-          have h_f2_span_y :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S y) := by exact hz_f₂
-          have h_β_in_image : β ∈ C '' edgeSpan G_S y := by use ⟨ f₂, h_2G_S ⟩
-          rw [Set.diff] at h_β
-          dsimp at h_β
-          exact h_β.right h_β_in_image
-
-        have touching_e_impossible_α ( hz_f₂ : Sym2.Mem x f₂ )
-        (colored_α : α = C { val := ↑f₂, property := h_2G_S } )
-        : False := by
-          have h_f2_span_x :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S x) := by exact hz_f₂
-          have h_α_in_image : α ∈ C '' edgeSpan G_S x := by use ⟨ f₂, h_2G_S ⟩ ; exact ⟨ h_f2_span_x , colored_α.symm ⟩
-          rw [Set.diff] at h_α
-          dsimp at h_α
-          exact h_α.right h_α_in_image
-
-        simp [Adj, lineGraph] at h_adj
-        unfold Adjacent at h_adj
-        obtain ⟨ z, hz ⟩ := h_adj.left
-        rw [ AdjacentAt, h_1e  ] at hz
-        rcases hz with ⟨hz_e, hz_f₂⟩
-        have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
-        split_ifs at h_same_color with exists_trail change_α_2_β change_β_2_α
-        · --DONE exists_trail, change_α_2_β
-          exact h_ab h_same_color
-        · --DONE exists_trail, change_β_2_α
-          cases h_zxy with
-          | inl  h_zx =>
-            rcases exists_trail with ⟨ℓ₁, ℓ₂, p, h_ed, alt_prop⟩
-            have h_x_mem : x = ℓ₁ ∨ x = ℓ₂ := by rw [ h_zx, <- h_ed, Sym2.mem_iff'] at hz_f₂ ; exact hz_f₂.symm
-            have yx_trail: (R_y x) := by
-              dsimp [R_y, R_reach ]
-              cases h_x_mem with
-              | inl h_x_v₁ => rw [h_x_v₁] ; use p ; cases alt_prop ; repeat assumption
-              | inr h_x_v₂ => rw [h_x_v₂] ; use (Walk.cons (adj_of_edge h_ed) p)
-            exact hp yx_trail
-          | inr  h_zy =>
-            rw [ h_zy ] at hz_f₂
-            exact touching_e_impossible_β hz_f₂ change_β_2_α
-        · -- DONE exists_trail, neither α nor β, no change
-          exact change_α_2_β h_same_color.symm
-        · -- DONE exists NO trail, no change
-          cases h_zxy with
-          | inl  h_zx =>
-            rw [ h_zx ] at hz_f₂
-            exact touching_e_impossible_α hz_f₂ h_same_color
-          | inr  h_zy =>
-            rw [ h_zy ] at hz_f₂
-            let other := Sym2.Mem.other hz_f₂
-            have h_f₂_eq : s(other, y) = ↑f₂  := by rw [Sym2.eq_swap] ; exact Sym2.other_spec hz_f₂
-            have h_adj_trail : G_S.Adj other y := by apply @adj_of_edge V G_S y other ⟨ f₂, h_2G_S⟩ h_f₂_eq
-
-            have h_used : E_y ⟨ f₂, h_2G_S⟩  := by
-              simp [E_y]
-              use y, other, Walk.nil' y
-              refine { h_ed := ?_, alt_prop := ?_ }
-              · exact h_f₂_eq
-              · apply at_prop.ba ; exact at_prop.nil ; symm ;
-                simp [<- h_f₂_eq] at h_same_color ; exact h_same_color ; simp ; exact (Adj.ne h_adj_trail )
-            exact exists_trail h_used
-
-      intro f₁ f₂ h_adj
-      change (C_extension_alt f₁) ≠ (C_extension_alt f₂)
-      have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
-      have h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) := by intro h' ; exact h_diff (Subtype.coe_inj.mp h' )
-
-      by_cases h_1e : (f₁ :Sym2 V) = e
-
-      · -- f₁ = e ≠ f₂
-        exact h_e_f f₁ f₂ h_1e h_adj
-      · -- e ≠ f₁
-        by_cases h_2e : (f₂ :Sym2 V) = e
-        · -- f₂ = e ≠ f₁ symmetric to the case above.
-          exact (h_e_f f₂ f₁ h_2e h_adj.symm).symm
-        · -- f₂ ≠  e ≠ f₁
-          have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.property, h_1e⟩
-          have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
-          have h_1eval : C_extension_alt f₁ = C_alt ⟨f₁, h_1G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_1e]
-          have h_2eval : C_extension_alt f₂ = C_alt ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
-          intro h_same_color
-          rw [ h_2eval, h_1eval ] at h_same_color
-          dsimp [C_alt ] at h_same_color
-          have h_adj_G_S : (lineGraph G_S).Adj ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
-            rw [Adj, lineGraph ] at *
-            simp only at *
-            unfold Adjacent at *
-            obtain ⟨ z, hz ⟩ := h_adj.left
-            rw [ AdjacentAt  ] at hz
-
-            constructor
-            · use z
-              rw [AdjacentAt]
-              exact hz
-            · intro h
-              have h_fst_eq : (⟨f₁, h_1G_S⟩ : { x // x ∈ G_S.edgeSet }).val = (⟨f₂, h_2G_S⟩ : { x // x ∈ G_S.edgeSet }).val := congr_arg Subtype.val h
-              simp only [Subtype.val] at h_fst_eq
-              exact h_diff_sym2 h_fst_eq
-          have h_C_different : C ⟨f₁, h_1G_S ⟩ ≠ C ⟨f₂, h_2G_S ⟩ := by
-            exact Adj.ne (hC h_adj_G_S)
-
-          split_ifs at h_same_color
-          with trail_f1 C_f1_α trail_f2_neg f2_α f2_β_neg C_f1_β trail_f2_neg f2_α_neg f2_β _ _ _ trail_f2 f2_α_neg f2_β
-          · rw [<- f2_α  ] at C_f1_α
-            exact h_C_different C_f1_α
-          · exact h_ab h_same_color.symm
-          · exact f2_β_neg h_same_color.symm
-          · --f₁ reachable with α implies f₂ reachable extending with β
-            have f_2_reachable : E_y ⟨ f₂, h_2G_S ⟩  := by
-              apply extend_reachable G_S y ⟨ f₁, h_1G_S ⟩ ⟨ f₂, h_2G_S ⟩ h_adj_G_S trail_f1 α β C_f1_α h_same_color.symm
-              repeat simp
-              exact h_ab
-              dsimp [Set.diff] at h_β
-              exact h_β.2
-
-            exact trail_f2_neg f_2_reachable
-          · exact h_ab h_same_color
-          · rw [<- f2_β ] at C_f1_β
-            exact h_C_different C_f1_β
-          · exact f2_α_neg h_same_color.symm
-          · --f₁ reachable with β implies f₂ reachable extending with α
-            have f_2_reachable : E_y ⟨ f₂, h_2G_S ⟩  := by
-              apply extend_reachable G_S y ⟨ f₁, h_1G_S ⟩ ⟨ f₂, h_2G_S ⟩ h_adj_G_S trail_f1 β α C_f1_β h_same_color.symm
-              repeat simp
-              apply Ne.elim
-              symm
-              exact h_ab
-              dsimp [Set.diff] at h_β
-              exact h_β.2
-            exact trail_f2_neg f_2_reachable
-
-          · exact C_f1_β h_same_color
-          · exact C_f1_α h_same_color
-          · exact h_C_different h_same_color
-          · exact h_C_different h_same_color
-          · --f₂ reachable with β implies f₁ reachable extending with α
-            have f_1_reachable : E_y ⟨ f₁, h_1G_S ⟩  := by
-              apply extend_reachable G_S y ⟨ f₂, h_2G_S ⟩ ⟨ f₁, h_1G_S ⟩ h_adj_G_S.symm trail_f2 α β f2_α_neg h_same_color
-              repeat simp
-              exact h_ab
-              dsimp [Set.diff] at h_β
-              exact h_β.2
-            exact trail_f1 f_1_reachable
-          · --f₂ reachable with β implies f₁ reachable extending with α
-            have f_1_reachable : E_y ⟨ f₁, h_1G_S ⟩  := by
-              apply extend_reachable G_S y ⟨ f₂, h_2G_S ⟩ ⟨ f₁, h_1G_S ⟩ h_adj_G_S.symm trail_f2 β α f2_β h_same_color
-              repeat simp
-              apply Ne.elim
-              symm
-              exact h_ab
-              dsimp [Set.diff] at h_β
-              exact h_β.2
-            exact trail_f1 f_1_reachable
-
-          · exact h_C_different h_same_color
-          · exact h_C_different h_same_color
-
-
-lemma line_G_colorable_induced {V : Type}  {G : SimpleGraph V} [ DecidableRel G.Adj] [ h₁ : Fintype V] [h₂ : DecidableEq V] : prop_to_use (G.edgeSet).toFinset := by
+lemma line_G_colorable_induced {V : Type}  {G : SimpleGraph V}
+[ DecidableRel G.Adj] [ h₁ : Fintype V] [h₂ : DecidableEq V]
+: prop_to_use (G.edgeSet).toFinset := by
 apply Finset.induction_on
 · exact empty_graph_easy
 · intros e S h_eS h₃
-  exact @prop_insert_edge V h₁ h₂ G _ e S h_eS h₃
+  exact @prop_insert_edge V h₁ h₂ e S h_eS h₃
 
 
 lemma line_G_colorable [DecidableRel G.Adj] : Colorable (lineGraph G) (maxDegree G + 1)  := by
