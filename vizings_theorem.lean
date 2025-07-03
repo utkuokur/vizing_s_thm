@@ -5,7 +5,7 @@ import Mathlib.Combinatorics.SimpleGraph.Walk
 import Mathlib.Tactic
 import Mathlib.Data.Fintype.Basic
 
-open SimpleGraph Hom Iso Embedding Classical
+open SimpleGraph Hom Iso Embedding Classical Sym2 Walk
 
 variable {V : Type} {G : SimpleGraph V} {v : V} {T : Type v}
 
@@ -198,7 +198,7 @@ simp
 
 inductive at_prop {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)} { α β : Fin n }
   : ∀ { u v : V }, G.Walk u v → Prop where
-  | nil : ∀ {v : V}, at_prop (Walk.nil : G.Walk v v)
+  | nil : ∀ {v : V}, at_prop (Walk.nil' v)
   | ba : ∀ {u₂ u₁ v : V}, (p : G.Walk u₁ v) -> (h_prev : @at_prop V G n C α β u₁ v p)
    -> (h_adj : G.Adj u₂ u₁) -> C ⟨ s(u₂, u₁), by rw [mem_edgeSet]; exact h_adj ⟩  = α
    -> (h_norepeat : u₂ ∉ p.support) -> at_prop (Walk.cons h_adj p)
@@ -927,7 +927,6 @@ constructor
   intro hfeS hf hfe
   exact ⟨hfeS.resolve_left hfe, hf⟩
 
-
 lemma max_degree_mono  {V : Type} [ Fintype V] [ DecidableEq V]  {G H : SimpleGraph V} {h_mono : G ≤ H} :
 maxDegree ( G ) ≤ maxDegree ( H ) := by
 apply maxDegree_le_of_forall_degree_le
@@ -978,7 +977,7 @@ theorem degree_le_edgeChromaticNumber : G.degree v ≤  edgeChromaticNumber G :=
   rw [<- edgeSpan_card_eq_degree]
   exact edgeSpan_card_le_edgeChromaticNumber G v
 
-variable [ Fintype V]
+variable [ Fintype V ]
 
 lemma empty_zero_max_degree : maxDegree (⊥ : SimpleGraph V) = 0 := by
 apply Nat.le_antisymm
@@ -1005,7 +1004,7 @@ exact hw
 --Given a graph G, a vertex u ∈ V(G), and a function C: E(G) → (Δ+1),
 --then we obtain a proof that there is at least one color missing in the neighbourhood of u
 def missing_color (G : SimpleGraph V) [DecidableRel G.Adj] (C : (edgeSet G) → (Fin ( G.maxDegree + 1))) (u : V)
-: Nonempty (Set.diff (@Set.univ (Fin ( G.maxDegree + 1))) (C '' (edgeSpan G u))) := by
+: ∃β : (Fin ( G.maxDegree + 1)), β ∉ (C '' (edgeSpan G u)) := by
 have h_sub : ( (C '' (edgeSpan G u)).toFinset) ⊆ ((@Set.univ (Fin ( G.maxDegree + 1))).toFinset):= by simp
 have hcard : 0 < ((@Set.univ (Fin ( G.maxDegree  + 1))).toFinset).card - ((C '' (edgeSpan G u)).toFinset).card := by
   simp
@@ -1014,7 +1013,10 @@ have hcard : 0 < ((@Set.univ (Fin ( G.maxDegree  + 1))).toFinset).card - ((C '' 
   · exact card_image_le
   · rw [degree_eq_card_edgeSpan]
     exact degree_le_maxDegree G u
-exact subset_card_ne_implies_nonempty_diff h_sub hcard
+obtain ⟨ β, hβ ⟩ := subset_card_ne_implies_nonempty_diff h_sub hcard
+use β
+dsimp [Set.diff] at *
+exact hβ.2
 
 abbrev eg ( S: Finset (Sym2 V) ) : SimpleGraph V := (fromEdgeSet (toSet S)) --edge-induced-graph
 
@@ -1040,8 +1042,10 @@ lemma path_concat {V : Type} {G : SimpleGraph V} {v u₁ u₂: V}
 simp [Walk.concat] at h_path
 exact Walk.IsPath.of_append_left h_path
 
+
+
 lemma extending_edge_coloring_helper {V : Type} [ Fintype V ] [ DecidableEq V ]
-{S : Finset (Sym2 V)} {e: Sym2 V } {h_eS: e ∉ S } {n: ℕ} {α β : (Fin n)}
+{S : Finset (Sym2 V)} {e: Sym2 V} {h_eS: e ∉ S } {n: ℕ} {α β : (Fin n)}
 {C: EdgeColoring (eg S) (Fin n)} {x y :V} {h_exy : e = s(x,y) }
 {h_xα: α ∉ (C '' (edgeSpan (eg S) x)) } {{h_yβ: β ∉ (C '' (edgeSpan (eg S) y)) }}
 {hp : ¬ @R_reach V (eg S) n C α β y x }
@@ -1312,6 +1316,71 @@ by_cases h_ab : α = β
       · exact h_C_different h_same_color
       · exact h_C_different h_same_color
 
+inductive fan_seq_prop {V : Type} {G : SimpleGraph V} {n : ℕ}
+  (C : EdgeColoring G (Fin n)) (x y₀ : V) : List V → Prop where
+  | nil: fan_seq_prop C x y₀ [y₀]
+  | cons: ∀ {z : V},
+  ∀ {h_adj : G.Adj x z}, C ⟨s(x, z), h_adj ⟩ ∉ C '' edgeSpan G y_i
+  → fan_seq_prop C x y₀ (y_i :: as)
+  → fan_seq_prop C x y₀ (z :: y_i :: as)
+
+def validFanSeqs {V : Type} {G : SimpleGraph V} {n : ℕ}
+(C : EdgeColoring G (Fin n)) (x y₀ : V) : Type := {seq : List V // fan_seq_prop C x y₀ seq }
+
+instance fintypeListsLengthLt (V : Type) [Fintype V] (n : ℕ) : Fintype { seq : List V // seq.length < n } := by
+  induction n with
+  | zero =>     exact ⟨∅, by simp ⟩
+  | succ n ih =>
+    let A := { seq : List V // seq.length < n }
+    let B := { seq : List V // seq.length = n }
+    haveI : Fintype B := Fintype.ofEquiv (List.Vector V n) (Equiv.refl _)
+    haveI : Fintype (A ⊕ B) :=  by exact instFintypeSum A B
+    let toFun : A ⊕ B → { seq : List V // seq.length < n+1 } := fun x => match x with
+      | Sum.inl ⟨seq, h⟩ => ⟨seq, Nat.lt_succ_of_le h.le⟩
+      | Sum.inr ⟨seq, h⟩ => ⟨seq, by simp [h]⟩
+    let invFun : { seq : List V // seq.length < n+1 } → A ⊕ B := fun ⟨seq, h⟩ =>
+      if h' : seq.length < n then Sum.inl ⟨seq, h'⟩
+      else Sum.inr ⟨seq, by simp at h'; exact Nat.le_antisymm (Nat.le_of_lt_succ h) h' ⟩
+    apply Fintype.ofEquiv (A ⊕ B) {
+      toFun := toFun
+      invFun := invFun
+      left_inv := by
+        intro x
+        cases x with
+        | inl y =>
+          rcases y with ⟨ _ , hy ⟩
+          simp [toFun, invFun, hy ]
+        | inr y =>
+          rcases y with ⟨ _ , hy ⟩
+          simp [toFun, invFun, hy ]
+      right_inv := by
+        intro x
+        simp [toFun , invFun]
+        split_ifs with h'
+        · simp [h']
+        · simp
+    }
+
+/-- Fintype instance for lists with length < Fintype.card V + 1 -/
+instance validFanSeqs_fintype_helper {V : Type} [Fintype V] [DecidableEq V]
+  : Fintype { seq : List V // seq.length < Fintype.card V + 1 } := fintypeListsLengthLt V (Fintype.card V + 1)
+
+noncomputable instance validFanSeqs_fintype {V : Type} [Fintype V]  {G : SimpleGraph V} {n : ℕ}
+  (C : EdgeColoring G (Fin n)) (x y₀ : V) : Fintype (validFanSeqs C x y₀) := by
+  let maxLen := Fintype.card V + 1
+  let func: (validFanSeqs C x y₀) → {seq: List V // seq.length < Fintype.card V + 1} := λ seq => ⟨ seq.1, by sorry ⟩
+  apply Fintype.ofInjective func
+  intro s₁ s₂
+
+  sorry
+
+instance validFanSeqs_nonempty {V : Type} [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
+  (C : EdgeColoring G (Fin n)) (x y₀ : V) : Nonempty (validFanSeqs C x y₀) := by use [y₀] ; sorry
+
+def validFanSeqs_max {V : Type} [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
+  (C : EdgeColoring G (Fin n)) (x y₀ : V) {h_fin: Finite (validFanSeqs C x y₀)}
+  : ∃ seq : (validFanSeqs C x y₀), ∀ w :(validFanSeqs C x y₀), w.1.length ≤ seq.1.length := by apply Finite.exists_max
+
 theorem prop_insert_edge {V : Type} [ Fintype V ] [ DecidableEq V]  :
 ∀ ⦃e : (Sym2 V)⦄ {S : Finset (Sym2 V)}, e ∉ S → prop_to_use S → prop_to_use (insert e S) := by
 intro e S h_eS IH
@@ -1321,6 +1390,11 @@ let Δ₁ := ( maxDegree G_S ) + 1
 change Colorable (lineGraph G_S ) Δ₁ at IH
 let G_host := fromEdgeSet (toSet (insert e S))
 let Δ_host_1 := ( maxDegree G_host ) + 1
+have delta_comp :  Δ₁ ≤ Δ_host_1   := by
+  dsimp
+  rw [Nat.add_le_add_iff_right]
+  exact (insert_back_degrees).left
+
 change Colorable (lineGraph G_host ) Δ_host_1
 
 by_cases h_diag : e.IsDiag
@@ -1349,38 +1423,37 @@ by_cases h_diag : e.IsDiag
   have h_xy : y₀ ≠ x := Sym2.other_ne h_diag h_xe
   have h_exy : e = s(x,y₀) := (Sym2.mem_and_mem_iff h_xy.symm).mp ⟨ h_xe, h_ye ⟩
 
-  obtain ⟨α,h_α⟩ := missing_color (fromEdgeSet (toSet S)) C x
-  obtain ⟨β,h_β⟩ := missing_color (fromEdgeSet (toSet S)) C y₀
-  have delta_comp :  Δ₁ ≤ Δ_host_1   := by
-    dsimp
-    rw [Nat.add_le_add_iff_right]
-    exact (insert_back_degrees).left
+  -- let seq_fan : List V := maximal_fan C x y₀ []
+  -- sorry
+  -- have h_nonempty: 0 < seq_fan.length := by
+  --   refine List.length_pos_iff_exists_mem.mpr ?_
+  --   use y₀
+  --   simp [seq_fan, maximal_fan]
+  -- -- sorry
+  -- let y_last := seq_fan.head (by apply List.length_pos.mp ; exact h_nonempty )
 
-  let R_y : V → Prop := fun z => @R_reach V G_S Δ₁ C α β y₀ z
-  by_cases hp : @R_reach V G_S Δ₁ C α β y₀ x
-  ·
-  -- · let rec build_sequence : List V → List V
-  --   | [] => []
-  --   | y_i :: ys =>
-  --     let candidates := (G_S.neighborFinset x).filter (fun z => C ⟨ s(x, z), by sorry ⟩  ∉ C '' edgeSpan G_S y_i)
-  --     if h : ∃ z, z ∈ candidates then
-  --       let z := h.choose
-  --       z :: build_sequence (z :: y_i :: ys)
-  --     else
-  --       y_i :: ys
-  --   termination_by
+  -- obtain ⟨α,h_α⟩ := missing_color G_S C x
+  -- obtain ⟨β,h_β⟩ := missing_color G_S C y_last
+  -- have h_adj_last : G_S.Adj x y_last := by sorry
+  sorry
+  -- sorry
+
+
+  -- let R_y : V → Prop := fun z => @R_reach V G_S Δ₁ C α β y_last z
+  -- by_cases hp : @R_reach V G_S Δ₁ C α β y_last x
+  -- ·
+
+
+
   --   sorry
 
-    sorry
-  · apply Colorable.mono delta_comp
-    have h_yβ : β ∉ C '' edgeSpan G_S y₀ := by
-      rw [Set.diff] at h_β
-      exact h_β.2
-    have h_xα : α ∉ C '' edgeSpan G_S x := by
-      rw [Set.diff] at h_α
-      exact h_α.2
-    apply extending_edge_coloring_helper
-    repeat assumption
+
+  -- · apply Colorable.mono delta_comp
+  --   apply extending_edge_coloring_helper
+  --   repeat assumption
+  --   sorry
+  --   sorry
+  --   sorry
 
 
 lemma line_G_colorable_induced {V : Type}  {G : SimpleGraph V}
