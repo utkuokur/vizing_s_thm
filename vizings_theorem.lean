@@ -1321,11 +1321,28 @@ inductive fan_seq_prop {V : Type} {G : SimpleGraph V} {n : ℕ}
   | nil: fan_seq_prop C x y₀ [y₀]
   | cons: ∀ {z : V},
   ∀ {h_adj : G.Adj x z}, C ⟨s(x, z), h_adj ⟩ ∉ C '' edgeSpan G y_i
+  → z ∉ y_i :: as
   → fan_seq_prop C x y₀ (y_i :: as)
   → fan_seq_prop C x y₀ (z :: y_i :: as)
 
 def validFanSeqs {V : Type} {G : SimpleGraph V} {n : ℕ}
 (C : EdgeColoring G (Fin n)) (x y₀ : V) : Type := {seq : List V // fan_seq_prop C x y₀ seq }
+
+def validFanSeqs_length {V : Type} [Fintype V] {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} (seq: List V) (h_seq: fan_seq_prop C x y₀ seq)
+: seq.length ≤ Fintype.card V := by
+have h_nodup : seq.Nodup := by
+    induction h_seq with
+    | nil => simp
+    | cons h_adj h_nin h_prev ih =>
+      simp only [List.nodup_cons]
+      simp at ih
+      exact ⟨by assumption, ih⟩
+simp [<- List.toFinset_card_of_nodup h_nodup, <- (card_of_finset' seq.toFinset)]
+have h₁ : Fintype.card {v : V | v ∈ seq} = #seq.toFinset := by apply card_of_finset' seq.toFinset ; simp
+rw [<-h₁]
+exact set_fintype_card_le_univ {v | v ∈ seq}
+
 
 instance fintypeListsLengthLt (V : Type) [Fintype V] (n : ℕ) : Fintype { seq : List V // seq.length < n } := by
   induction n with
@@ -1361,27 +1378,35 @@ instance fintypeListsLengthLt (V : Type) [Fintype V] (n : ℕ) : Fintype { seq :
         · simp
     }
 
-/-- Fintype instance for lists with length < Fintype.card V + 1 -/
 instance validFanSeqs_fintype_helper {V : Type} [Fintype V] [DecidableEq V]
   : Fintype { seq : List V // seq.length < Fintype.card V + 1 } := fintypeListsLengthLt V (Fintype.card V + 1)
 
 noncomputable instance validFanSeqs_fintype {V : Type} [Fintype V]  {G : SimpleGraph V} {n : ℕ}
-  (C : EdgeColoring G (Fin n)) (x y₀ : V) : Fintype (validFanSeqs C x y₀) := by
-  let maxLen := Fintype.card V + 1
-  let func: (validFanSeqs C x y₀) → {seq: List V // seq.length < Fintype.card V + 1} := λ seq => ⟨ seq.1, by sorry ⟩
-  apply Fintype.ofInjective func
-  intro s₁ s₂
+{C : EdgeColoring G (Fin n)} {x y₀ : V} : Fintype (validFanSeqs C x y₀) := by
+let maxLen := Fintype.card V + 1
+let func: (validFanSeqs C x y₀)
+→ {seq: List V // seq.length < Fintype.card V + 1} := λ seq
+=> ⟨ seq.1, by apply Nat.lt_succ_of_le ; exact validFanSeqs_length seq.1 seq.2 ⟩
+apply Fintype.ofInjective func
+intro s₁ s₂ h_eq
+cases s₁; cases s₂
+simp only [Subtype.mk.injEq, func] at h_eq
+exact Subtype.eq h_eq
 
-  sorry
+instance validFanSeqs_finite {V : Type} [Fintype V]  {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} : Finite (validFanSeqs C x y₀) := by
+apply Fintype.finite
+exact validFanSeqs_fintype
 
 instance validFanSeqs_nonempty {V : Type} [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
-  (C : EdgeColoring G (Fin n)) (x y₀ : V) : Nonempty (validFanSeqs C x y₀) := by use [y₀] ; sorry
+  (C : EdgeColoring G (Fin n)) (x y₀ : V) : Nonempty (validFanSeqs C x y₀) := by use [y₀] ; exact fan_seq_prop.nil
 
-def validFanSeqs_max {V : Type} [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
-  (C : EdgeColoring G (Fin n)) (x y₀ : V) {h_fin: Finite (validFanSeqs C x y₀)}
-  : ∃ seq : (validFanSeqs C x y₀), ∀ w :(validFanSeqs C x y₀), w.1.length ≤ seq.1.length := by apply Finite.exists_max
+def validFanSeqs_max {V : Type} [Fintype V] [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
+  (C : EdgeColoring G (Fin n)) (x y₀ : V)
+  : ∃ seq : (validFanSeqs C x y₀), ∀ w :(validFanSeqs C x y₀), w.1.length ≤ seq.1.length := by
+  apply Finite.exists_max
 
-theorem prop_insert_edge {V : Type} [ Fintype V ] [ DecidableEq V]  :
+theorem prop_insert_edge {V : Type} [ Fintype V ] [ DecidableEq V ]  :
 ∀ ⦃e : (Sym2 V)⦄ {S : Finset (Sym2 V)}, e ∉ S → prop_to_use S → prop_to_use (insert e S) := by
 intro e S h_eS IH
 rw [prop_to_use] at *
@@ -1396,6 +1421,7 @@ have delta_comp :  Δ₁ ≤ Δ_host_1   := by
   exact (insert_back_degrees).left
 
 change Colorable (lineGraph G_host ) Δ_host_1
+
 
 by_cases h_diag : e.IsDiag
 · -- e is diagonal, and eliminated while forming G_host
@@ -1422,6 +1448,8 @@ by_cases h_diag : e.IsDiag
   have h_ye : y₀ ∈ e := Sym2.other_mem h_xe
   have h_xy : y₀ ≠ x := Sym2.other_ne h_diag h_xe
   have h_exy : e = s(x,y₀) := (Sym2.mem_and_mem_iff h_xy.symm).mp ⟨ h_xe, h_ye ⟩
+  obtain ⟨ seq, h_seq ⟩ := validFanSeqs_max C x y₀
+
 
   -- let seq_fan : List V := maximal_fan C x y₀ []
   -- sorry
