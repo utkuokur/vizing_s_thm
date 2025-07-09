@@ -5,7 +5,7 @@ import Mathlib.Combinatorics.SimpleGraph.Walk
 import Mathlib.Tactic
 import Mathlib.Data.Fintype.Basic
 
-open SimpleGraph Hom Iso Embedding Classical Sym2 Walk
+open SimpleGraph Hom Iso Embedding Classical Sym2 Walk List
 
 variable {V : Type} {G : SimpleGraph V} {v : V} {T : Type v}
 
@@ -78,7 +78,7 @@ lemma other_not_eq_given {x y : V} (hne : x ≠ y) (h₁ : x ∈ s(x,y)) : (Sym2
 
 noncomputable def neighborSetedgeSpanEquiv : (neighborSet G v) ≃ (edgeSpan G v) where
   toFun := fun ⟨v',hv'⟩ => by
-    refine ⟨⟨  s(v,v') ,hv'⟩,?_⟩
+    refine ⟨⟨  s(v,v') ,hv'⟩, ?_⟩
     · change v ∈ s(v, ↑v')
       rw [Sym2.mem_iff]
       exact Or.inl rfl
@@ -160,8 +160,9 @@ theorem h_second_penult {V : Type} {G : SimpleGraph V} {v u: V}
       · apply reverse_not_nil ; apply Walk.not_nil_cons
     · apply Walk.not_nil_cons
 
-lemma insert_edgeset_non_diag { V : Type } [ Fintype V] [ DecidableEq V] (e : (Sym2 V)) (h_e_not_diag : ¬ e.IsDiag)
- {S : Finset (Sym2 V)} : edgeSet (fromEdgeSet ((insert e S).toSet)) = (edgeSet (fromEdgeSet S.toSet)) ∪ {e}:= by
+lemma insert_edgeset_non_diag { V : Type } [ Fintype V] [ DecidableEq V] {e : (Sym2 V)}
+(h_e_not_diag : ¬ e.IsDiag) {S : Finset (Sym2 V)}
+: (fromEdgeSet ((insert e S).toSet)).edgeSet = ((fromEdgeSet S.toSet).edgeSet) ∪ {e}:= by
 simp
 ext f
 constructor
@@ -194,7 +195,6 @@ apply same_color_helper ⟨ s(y₂,x), (mem_edgeSet G).mp h₂ ⟩ h_diff
 simp
 exact ⟨h_neq, (G.ne_of_adj h₁) ⟩
 simp
-
 
 inductive at_prop {V : Type} {G : SimpleGraph V} {n:ℕ} {C : EdgeColoring G (Fin n)} { α β : Fin n }
   : ∀ { u v : V }, G.Walk u v → Prop where
@@ -1042,7 +1042,84 @@ lemma path_concat {V : Type} {G : SimpleGraph V} {v u₁ u₂: V}
 simp [Walk.concat] at h_path
 exact Walk.IsPath.of_append_left h_path
 
+lemma extending_missing_same {V : Type} [ Fintype V ] [ DecidableEq V ]
+{S : Finset (Sym2 V)} {e: Sym2 V} (h_eS: e ∉ S) {n: ℕ} (α: (Fin n))
+{C: EdgeColoring (eg S) (Fin n)} {x y :V} (h_exy : e = s(x,y))
+(h_xα: α ∉ (C '' (edgeSpan (eg S) x))) (h_yβ: α ∉ (C '' (edgeSpan (eg S) y)))
+: Colorable (lineGraph (eg (insert e S))) n := by
+let G_S := eg S
+let G_host := (eg (insert e S))
+change Colorable (lineGraph G_host ) n
+have hC : ∀ {a b : ↑(edgeSet G_S)}, Adj (lineGraph G_S) a b → Adj ⊤ (C a) (C b) := by
+  intro f₁ f₂ h₁₇
+  change Ne (C f₁) (C f₂)
+  exact Coloring.valid C h₁₇
 
+have h_set_diff : (edgeSet G_S )  = edgeSet G_host \ ( {e} : Set (Sym2 V) ) := by
+    dsimp
+    exact insert_edgeset h_eS
+
+let C_extension_alt : edgeSet G_host → (Fin n) := fun f =>
+if h_ef: f = e then α else
+have h_f : f.val ∈ (edgeSet G_S) := by
+  rw [ h_set_diff ]
+  exact ⟨f.2, h_ef⟩
+(C ⟨ f, h_f ⟩)
+use C_extension_alt
+intro f₁ f₂ h_adj
+change Ne (C_extension_alt f₁) (C_extension_alt f₂)
+intro h_same_color
+have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
+have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := @lift_edge_type V G_host f₁ f₂ h_diff
+
+have symmetric_argument_f12 (f₁ f₂ : edgeSet G_host ) (h_1e : (f₁ : Sym2 V) = e)
+  (h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) ) (h_same_color : C_extension_alt f₁ = C_extension_alt f₂)
+  (h_adj : Adj (lineGraph G_host) f₁ f₂) : False := by
+  have h_1eval : C_extension_alt f₁ = α  := by dsimp [C_extension_alt] ; simp [h_1e]
+  have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
+  have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
+  have h_2eval : C_extension_alt f₂ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
+  rw [ h_1eval, h_2eval  ] at h_same_color
+  rw [Adj, lineGraph ] at h_adj
+  simp only at h_adj
+  unfold Adjacent at h_adj
+  obtain ⟨ z, hz ⟩ := h_adj.left
+  rw [ AdjacentAt, h_1e  ] at hz
+  rcases hz with ⟨hz_e, hz_f₂⟩
+  have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
+  cases h_zxy with
+  | inl h_zx  =>
+  rw [<-h_zx ] at h_xα
+  have h_contra: α ∈ C '' edgeSpan (eg S) z := by
+    use ⟨ f₂ , h_2G_S ⟩
+    exact ⟨ hz_f₂ , h_same_color.symm ⟩
+  contradiction
+  | inr h_zy =>
+  rw [<-h_zy ] at h_yβ
+  have h_contra: α ∈ C '' edgeSpan (eg S) z := by
+    use ⟨ f₂ , h_2G_S ⟩
+    exact ⟨ hz_f₂ , h_same_color.symm ⟩
+  contradiction
+
+by_cases h_1e : (f₁ :Sym2 V) = e
+· exact symmetric_argument_f12 f₁ f₂ h_1e h_diff_sym2 h_same_color h_adj
+· by_cases h_2e : (f₂ :Sym2 V) = e
+  · exact symmetric_argument_f12 f₂ f₁ h_2e h_diff_sym2.symm h_same_color.symm h_adj.symm
+  · have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.2, h_1e⟩
+    have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.2, h_2e⟩
+    have h_12eval : C ⟨f₁, h_1G_S ⟩ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] at h_same_color ; simp [h_1e, h_2e] at h_same_color ; exact h_same_color
+    have adjacent_line_G_S : Adj (lineGraph G_S) ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
+      rw [Adj , lineGraph]
+      constructor
+      · rw [Adj, lineGraph] at h_adj
+        exact h_adj.left
+      · intro hf12
+        rw [Subtype.mk.injEq] at hf12
+        exact h_diff_sym2 hf12
+
+    have h_adj_top : Adj ⊤ (C ⟨f₁, h_1G_S ⟩) (C ⟨f₂, h_2G_S ⟩) := hC adjacent_line_G_S
+    rw [ h_12eval ] at h_adj_top
+    simp at h_adj_top
 
 lemma extending_edge_coloring_helper {V : Type} [ Fintype V ] [ DecidableEq V ]
 {S : Finset (Sym2 V)} {e: Sym2 V} {h_eS: e ∉ S } {n: ℕ} {α β : (Fin n)}
@@ -1063,76 +1140,11 @@ have h_set_diff : (edgeSet G_S )  = edgeSet G_host \ ( {e} : Set (Sym2 V) ) := b
     exact insert_edgeset h_eS
 
 by_cases h_ab : α = β
-· -- Assume α = β is missing in both x and y
-  let C_extension_alt : edgeSet G_host → (Fin n) := fun f =>
-  if h_ef: f = e then α else
-  have h_f : f.val ∈ (edgeSet G_S) := by
-    rw [ h_set_diff ]
-    exact ⟨f.property, h_ef⟩
-  (C ⟨ f, h_f ⟩)
-  use C_extension_alt
-  intro f₁ f₂ h_adj
-  change Ne (C_extension_alt f₁) (C_extension_alt f₂)
-  intro h_same_color
-  have h_diff : f₁ ≠ f₂ := by exact Adj.ne h_adj
-  have h_diff_sym2 : (f₁ :Sym2 V) ≠ (f₂ :Sym2 V) := @lift_edge_type V G_host f₁ f₂ h_diff
+· -- Assume α = β is missing in both x and y, then color e by α
+  rw [<-h_ab] at h_yβ
+  exact extending_missing_same h_eS α h_exy h_xα h_yβ
 
-  have symmetric_argument_f12 (f₁ f₂ : edgeSet G_host ) (h_1e : (f₁ : Sym2 V) = e)
-    (h_diff_sym2 : (f₁ : Sym2 V) ≠ (f₂ : Sym2 V) ) (h_same_color : C_extension_alt f₁ = C_extension_alt f₂)
-    (h_adj : Adj (lineGraph G_host) f₁ f₂) : False := by
-    have h_1eval : C_extension_alt f₁ = α  := by dsimp [C_extension_alt] ; simp [h_1e]
-    have h_2e : (f₂ :Sym2 V) ≠ e := by rw [h_1e] at h_diff_sym2 ; exact Ne.symm h_diff_sym2
-    have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
-    have h_2eval : C_extension_alt f₂ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] ; simp [h_2e]
-    rw [ h_1eval, h_2eval  ] at h_same_color
-
-    rw [Adj, lineGraph ] at h_adj
-    simp only at h_adj
-    unfold Adjacent at h_adj
-    obtain ⟨ z, hz ⟩ := h_adj.left
-    rw [ AdjacentAt, h_1e  ] at hz
-    rcases hz with ⟨hz_e, hz_f₂⟩
-    have h_zxy : z = x ∨ z = y := by rw [h_exy] at hz_e ; exact Sym2.mem_iff.mp hz_e
-
-    have touching_e_impossible (γ : Fin n ) (h_γαβ : γ = α ∨ γ = β) (u z : V)
-    (h_gamma : γ ∉ (C '' (edgeSpan G_S u)) )
-    (h_zu :  z = u ) (hz_e :  Sym2.Mem z e ) ( hz_f₂ : Sym2.Mem z f₂ ) : False := by
-      have h_same_color_γ : γ = C { val := ↑f₂, property := h_2G_S } := by
-        cases h_γαβ with
-        | inl h_γα => rw [← h_γα] at h_same_color ; exact h_same_color
-        | inr h_γβ => rw [← h_ab ] at h_γβ ; rw [← h_γβ ] at h_same_color ; exact h_same_color
-
-      have h_f2_span_u :  ⟨ f₂, h_2G_S ⟩ ∈ (edgeSpan G_S u) := by rw [← h_zu] ; exact hz_f₂
-      have h_gamma_in_image : γ ∈ C '' edgeSpan G_S u := by use ⟨ f₂, h_2G_S ⟩ ; exact ⟨ h_f2_span_u , h_same_color_γ.symm ⟩
-      contradiction
-
-    cases h_zxy with
-    | inl h_zx  =>
-    exact touching_e_impossible α (Or.inl rfl) x z h_xα h_zx  hz_e hz_f₂
-    | inr h_zy =>
-    exact touching_e_impossible β (Or.inr rfl) y z h_yβ h_zy hz_e hz_f₂
-
-  by_cases h_1e : (f₁ :Sym2 V) = e
-  · exact symmetric_argument_f12 f₁ f₂ h_1e h_diff_sym2 h_same_color h_adj
-  · by_cases h_2e : (f₂ :Sym2 V) = e
-    · exact symmetric_argument_f12 f₂ f₁ h_2e h_diff_sym2.symm h_same_color.symm h_adj.symm
-    · have h_1G_S : (f₁ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₁.property, h_1e⟩
-      have h_2G_S : (f₂ :Sym2 V) ∈ (edgeSet G_S) := by rw [ h_set_diff ] ; exact ⟨ f₂.property, h_2e⟩
-      have h_12eval : C ⟨f₁, h_1G_S ⟩ = C ⟨f₂, h_2G_S ⟩  := by dsimp [C_extension_alt] at h_same_color ; simp [h_1e, h_2e] at h_same_color ; exact h_same_color
-      have adjacent_line_G_S : Adj (lineGraph G_S) ⟨f₁, h_1G_S ⟩ ⟨f₂, h_2G_S ⟩ := by
-        rw [Adj , lineGraph]
-        constructor
-        · rw [Adj, lineGraph] at h_adj
-          exact h_adj.left
-        · intro hf12
-          rw [Subtype.mk.injEq] at hf12
-          exact h_diff_sym2 hf12
-
-      have h_adj_top : Adj ⊤ (C ⟨f₁, h_1G_S ⟩) (C ⟨f₂, h_2G_S ⟩) := hC adjacent_line_G_S
-      rw [ h_12eval ] at h_adj_top
-      simp at h_adj_top
-
-·
+· -- Assume α ≠ β, interchange α and β
   let R_y : V → Prop := fun z => @R_reach V G_S n C α β y z
   let E_y : edgeSet G_S → Prop := fun f =>
     ∃ (ℓ₁ ℓ₂ : V), ∃ (p: G_S.Walk ℓ₁ y), @edge_used V G_S n C α β y ℓ₁ ℓ₂ p f
@@ -1149,7 +1161,7 @@ by_cases h_ab : α = β
   else
   have h_f : f.val ∈ (edgeSet G_S) := by
     rw [ h_set_diff ]
-    exact ⟨f.property, h_ef⟩
+    exact ⟨f.2, h_ef⟩
   C_alt ⟨ f, h_f ⟩
 
   use C_extension_alt
@@ -1316,11 +1328,25 @@ by_cases h_ab : α = β
       · exact h_C_different h_same_color
       · exact h_C_different h_same_color
 
+
+-- have h_nodup : seq.Nodup := by
+--     induction h_seq with
+--     | nil => simp
+--     | cons h_adj h_nin h_prev ih =>
+--       simp only [List.nodup_cons]
+--       simp at ih
+--       exact ⟨by assumption, ih⟩
+-- simp [<- List.toFinset_card_of_nodup h_nodup, <- (card_of_finset' seq.toFinset)]
+-- have h₁ : Fintype.card {v : V | v ∈ seq} = #seq.toFinset := by apply card_of_finset' seq.toFinset ; simp
+-- rw [<-h₁]
+-- exact set_fintype_card_le_univ {v | v ∈ seq}
+
+
 inductive fan_seq_prop {V : Type} {G : SimpleGraph V} {n : ℕ}
-  (C : EdgeColoring G (Fin n)) (x y₀ : V) : List V → Prop where
+(C : EdgeColoring G (Fin n)) (x y₀ : V) : List V → Prop where
   | nil: fan_seq_prop C x y₀ [y₀]
-  | cons: ∀ {z : V},
-  ∀ {h_adj : G.Adj x z}, C ⟨s(x, z), h_adj ⟩ ∉ C '' edgeSpan G y_i
+  | cons: ∀ {z : V}, {h_adj : G.Adj x z}
+  → C ⟨s(x, z), h_adj ⟩ ∉ C '' edgeSpan G y_i
   → z ∉ y_i :: as
   → fan_seq_prop C x y₀ (y_i :: as)
   → fan_seq_prop C x y₀ (z :: y_i :: as)
@@ -1328,7 +1354,7 @@ inductive fan_seq_prop {V : Type} {G : SimpleGraph V} {n : ℕ}
 def validFanSeqs {V : Type} {G : SimpleGraph V} {n : ℕ}
 (C : EdgeColoring G (Fin n)) (x y₀ : V) : Type := {seq : List V // fan_seq_prop C x y₀ seq }
 
-def validFanSeqs_length {V : Type} [Fintype V] {G : SimpleGraph V} {n : ℕ}
+lemma validFanSeqs_length {V : Type} [Fintype V] {G : SimpleGraph V} {n : ℕ}
 {C : EdgeColoring G (Fin n)} {x y₀ : V} (seq: List V) (h_seq: fan_seq_prop C x y₀ seq)
 : seq.length ≤ Fintype.card V := by
 have h_nodup : seq.Nodup := by
@@ -1343,6 +1369,52 @@ have h₁ : Fintype.card {v : V | v ∈ seq} = #seq.toFinset := by apply card_of
 rw [<-h₁]
 exact set_fintype_card_le_univ {v | v ∈ seq}
 
+lemma validFanSeqs_not_nil {V : Type} {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} {seq: List V} (h_seq: fan_seq_prop C x y₀ seq)
+: seq ≠ [] := by
+apply List.length_pos.mp
+refine List.length_pos_iff_exists_mem.mpr ?_
+use y₀
+induction h_seq with
+| nil => simp
+| cons a as => simp at * ; apply Or.inr ; assumption
+
+lemma contains_first {V : Type} {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} {seq: List V} (h_seq: fan_seq_prop C x y₀ seq)
+:  y₀ ∈ seq := by
+induction h_seq with
+|nil=> simp
+|cons a b as a_ih => simp at * ; exact Or.inr a_ih
+
+lemma list_length_head {V : Type} {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} (seq: List V) (h_seq: fan_seq_prop C x y₀ seq)
+(h_length : 2 ≤ seq.length)
+: (seq.head (by apply validFanSeqs_not_nil h_seq )) ≠ y₀ := by
+cases h_seq with
+|nil=> simp at h_length
+|cons a b as =>
+simp
+intro h₁
+rw [h₁] at b
+exact b (contains_first as)
+
+def validFanSeqs_adj {V : Type} [Fintype V] {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} {seq: List V} (h_seq: fan_seq_prop C x y₀ seq)
+: ∀z ∈ seq, z ≠ y₀ → G.Adj x z  := by
+induction h_seq with
+| nil =>  simp
+| cons h_ad as h_prev a_ih =>
+intro z hz
+cases List.mem_cons.mp hz with
+| inl h₁ => rw [h₁] ; intro ; assumption
+| inr h₂ => apply a_ih ; assumption
+
+def validFanSeqs_nodup {V : Type} [Fintype V] {G : SimpleGraph V} {n : ℕ}
+{C : EdgeColoring G (Fin n)} {x y₀ : V} {seq: List V} (h_seq: fan_seq_prop C x y₀ seq)
+: seq.Nodup := by
+induction h_seq with
+| nil => simp
+| cons h_ad as h_prev a_ih => apply Nodup.cons ; repeat assumption
 
 instance fintypeListsLengthLt (V : Type) [Fintype V] (n : ℕ) : Fintype { seq : List V // seq.length < n } := by
   induction n with
@@ -1364,19 +1436,10 @@ instance fintypeListsLengthLt (V : Type) [Fintype V] (n : ℕ) : Fintype { seq :
       left_inv := by
         intro x
         cases x with
-        | inl y =>
-          rcases y with ⟨ _ , hy ⟩
-          simp [toFun, invFun, hy ]
-        | inr y =>
-          rcases y with ⟨ _ , hy ⟩
-          simp [toFun, invFun, hy ]
-      right_inv := by
-        intro x
-        simp [toFun , invFun]
-        split_ifs with h'
-        · simp [h']
-        · simp
-    }
+        | inl y => rcases y with ⟨ _ , hy ⟩ ; simp [toFun, invFun, hy ]
+        | inr y => rcases y with ⟨ _ , hy ⟩ ; simp [toFun, invFun, hy ]
+      right_inv := by intro x ; simp [toFun , invFun] ; split_ifs with h' ; repeat simp [h']
+  }
 
 instance validFanSeqs_fintype_helper {V : Type} [Fintype V] [DecidableEq V]
   : Fintype { seq : List V // seq.length < Fintype.card V + 1 } := fintypeListsLengthLt V (Fintype.card V + 1)
@@ -1399,12 +1462,41 @@ apply Fintype.finite
 exact validFanSeqs_fintype
 
 instance validFanSeqs_nonempty {V : Type} [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
-  (C : EdgeColoring G (Fin n)) (x y₀ : V) : Nonempty (validFanSeqs C x y₀) := by use [y₀] ; exact fan_seq_prop.nil
+  (C : EdgeColoring G (Fin n)) (x y₀ : V)
+  : Nonempty (validFanSeqs C x y₀) := by use [y₀] ; exact fan_seq_prop.nil
 
 def validFanSeqs_max {V : Type} [Fintype V] [DecidableEq V] {G : SimpleGraph V} {n : ℕ}
   (C : EdgeColoring G (Fin n)) (x y₀ : V)
   : ∃ seq : (validFanSeqs C x y₀), ∀ w :(validFanSeqs C x y₀), w.1.length ≤ seq.1.length := by
   apply Finite.exists_max
+
+class SubgraphColoring (V : Type) (G : SimpleGraph V) (n : ℕ) where
+  ed : Sym2 V
+  coloring : (G.deleteEdges {ed}).edgeSet  -> (Fin n)
+
+-- #check Set.Subset
+
+noncomputable def shifted_colorings {V : Type}  {G: SimpleGraph V} {n : ℕ} (x y₀: V)
+(C₀: (G.deleteEdges { s(x,y₀) }).edgeSet  -> (Fin n) ) (seq : List V)
+(h_subset : ∀z ∈ seq, z ≠ y₀ ->  G.Adj x z)
+: List (SubgraphColoring V G n) := by
+induction seq with
+| nil => exact []
+| cons a as a_ih =>
+have this : ∀ z ∈ as , z ≠ y₀ -> G.Adj x z := by intro z hz; apply h_subset ; simp at * ; exact Or.inr hz
+have list_prev := @a_ih this
+cases list_prev with
+| nil => exact [ ⟨ s(x,y₀), C₀ ⟩ ]
+| cons B BS =>
+rcases B with ⟨ e',  C' ⟩
+if hp: a = y₀ then exact [ ⟨ s(x,y₀), C₀ ⟩ ]
+else
+let C_H : (G.deleteEdges {s(x,a)}).edgeSet  -> (Fin n) := fun ⟨ f, hf⟩  =>
+if h₁ : f  = e' then
+C' ⟨ s(x,a), by
+simp [edgeSet_deleteEdges, <-h₁] at * ; push_neg at * ; exact ⟨ h_subset.1 hp , hf.2.symm ⟩ ⟩
+else C' ⟨ f, by simp [edgeSet_deleteEdges] at * ; exact ⟨ hf.1, h₁ ⟩  ⟩
+exact ⟨ s(x,a), C_H ⟩ :: ⟨ e',  C' ⟩ :: BS
 
 theorem prop_insert_edge {V : Type} [ Fintype V ] [ DecidableEq V ]  :
 ∀ ⦃e : (Sym2 V)⦄ {S : Finset (Sym2 V)}, e ∉ S → prop_to_use S → prop_to_use (insert e S) := by
@@ -1422,7 +1514,6 @@ have delta_comp :  Δ₁ ≤ Δ_host_1   := by
 
 change Colorable (lineGraph G_host ) Δ_host_1
 
-
 by_cases h_diag : e.IsDiag
 · -- e is diagonal, and eliminated while forming G_host
   have h_loop : G_host = G_S := by simp [G_host, G_S] ; exact @insert_edgeset_diag V _ _ e h_diag (toSet S)
@@ -1434,54 +1525,69 @@ by_cases h_diag : e.IsDiag
   exact IH
 · -- e is non-diagonal, and is an edge of G_host
   have he : (e ∈ edgeSet G_host) := by simp [G_host] ; exact h_diag
-  have h_set_diff : (edgeSet G_S )  = edgeSet G_host \ ( {e} : Set (Sym2 V) ) := by
-    dsimp
+
+  have h_set_diff : (edgeSet G_S ) = (G_host.deleteEdges {e}).edgeSet := by
+    simp [ deleteEdges ]
     exact insert_edgeset h_eS
+
+  have h_set_union : G_host.edgeSet = (edgeSet G_S ) ∪ {e} := by
+    dsimp [ G_S, G_host ]
+    exact insert_edgeset_non_diag h_diag
+
   obtain ⟨ C ⟩ := IH
   have hC : ∀ {a b : ↑(edgeSet G_S)}, Adj (lineGraph G_S) a b → Adj ⊤ (C a) (C b) := by
     intro f₁ f₂ h₁₇
     change Ne (C f₁) (C f₂)
     exact Coloring.valid C h₁₇
+
   let x :=  e.out.1
   have h_xe : x ∈ e := Sym2.out_fst_mem e
   let y₀ := Sym2.Mem.other h_xe
+
   have h_ye : y₀ ∈ e := Sym2.other_mem h_xe
   have h_xy : y₀ ≠ x := Sym2.other_ne h_diag h_xe
   have h_exy : e = s(x,y₀) := (Sym2.mem_and_mem_iff h_xy.symm).mp ⟨ h_xe, h_ye ⟩
-  obtain ⟨ seq, h_seq ⟩ := validFanSeqs_max C x y₀
+  have func: (G_host.deleteEdges {s(x,y₀)}).edgeSet → Fin Δ₁ := by
+    simp [<-h_exy,<- h_set_diff]
+    use C
 
+  obtain ⟨ seq, h_max ⟩ := validFanSeqs_max C x y₀
+  rcases seq with ⟨ seq_1, h_seq ⟩
+  let y_last := seq_1.head (by apply validFanSeqs_not_nil h_seq )
 
-  -- let seq_fan : List V := maximal_fan C x y₀ []
-  -- sorry
-  -- have h_nonempty: 0 < seq_fan.length := by
-  --   refine List.length_pos_iff_exists_mem.mpr ?_
-  --   use y₀
-  --   simp [seq_fan, maximal_fan]
-  -- -- sorry
-  -- let y_last := seq_fan.head (by apply List.length_pos.mp ; exact h_nonempty )
+  obtain ⟨α,h_α⟩ := missing_color G_S C x
+  obtain ⟨β₀,h_β₀⟩ := missing_color G_S C y₀
 
-  -- obtain ⟨α,h_α⟩ := missing_color G_S C x
-  -- obtain ⟨β,h_β⟩ := missing_color G_S C y_last
-  -- have h_adj_last : G_S.Adj x y_last := by sorry
-  sorry
-  -- sorry
+  by_cases h_xβ: β₀ ∈ C '' edgeSpan G_S x
+  · obtain ⟨ f , hf ⟩ := h_xβ
+    obtain ⟨ z₁, hz ⟩ := hf.1
+    have h_at_least : fan_seq_prop C x y₀ (z₁ :: [y₀]) := by
+      apply fan_seq_prop.cons
+      simp only [<-hz, hf.2]
+      exact h_β₀
+      simp
+      intro h
+      have h_contra: β₀ ∈ C '' edgeSpan G_S y₀ := by
+        use f
+        exact ⟨ by change y₀ ∈ (f:Sym2 V) ; simp [<-h, hz], hf.2 ⟩
+      contradiction
+      exact fan_seq_prop.nil
+      exact adj_of_edge hz.symm
+    specialize h_max ⟨ (z₁ :: [y₀]), h_at_least⟩
+    simp at h_max
+    have h_adj_seq : ∀ z ∈ seq_1, z ≠ y₀ -> G_host.Adj x z := by
+      simp [<-mem_edgeSet]
+      intro z hz₁ hz₂
+      simp [h_set_union]
+      apply Or.inr
+      apply validFanSeqs_adj h_seq z hz₁ hz₂
+    have color_seq : List (SubgraphColoring V G_host Δ₁) := shifted_colorings x y₀ func seq_1 h_adj_seq
 
+    sorry
 
-  -- let R_y : V → Prop := fun z => @R_reach V G_S Δ₁ C α β y_last z
-  -- by_cases hp : @R_reach V G_S Δ₁ C α β y_last x
-  -- ·
+  · apply Colorable.mono delta_comp
+    apply extending_missing_same h_eS β₀ h_exy h_xβ h_β₀
 
-
-
-  --   sorry
-
-
-  -- · apply Colorable.mono delta_comp
-  --   apply extending_edge_coloring_helper
-  --   repeat assumption
-  --   sorry
-  --   sorry
-  --   sorry
 
 
 lemma line_G_colorable_induced {V : Type}  {G : SimpleGraph V}
